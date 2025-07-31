@@ -1,0 +1,160 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  username    String   @unique
+  email       String   @unique
+  walletAddress String? @unique
+  password    String?
+  userType    UserType @default(FREELANCER)
+  isVerified  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Profile information
+  profile Profile?
+
+  // Relationships
+  postedJobs    Job[]           @relation("ClientJobs")
+  applications  Application[]   @relation("FreelancerApplications")
+  sentReviews   Review[]        @relation("ReviewSender")
+  receivedReviews Review[]      @relation("ReviewReceiver")
+
+  @@map("users")
+}
+
+model Profile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  firstName    String?
+  lastName     String?
+  bio          String?
+  title        String?
+  location     String?
+  website      String?
+  companyName  String?
+  avatar       String?
+  
+  // Professional details
+  skills       String[]
+  hourlyRate   Float?
+  portfolio    String[]
+  experience   Int?         // years of experience
+  
+  // Reputation
+  rating       Float?       @default(0)
+  completedJobs Int?        @default(0)
+  totalEarnings Float?      @default(0)
+  
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@map("profiles")
+}
+
+model Job {
+  id          String     @id @default(cuid())
+  title       String
+  description String
+  clientId    String
+  client      User       @relation("ClientJobs", fields: [clientId], references: [id], onDelete: Cascade)
+  
+  // Budget information
+  budgetAmount Float
+  budgetType   BudgetType
+  currency     String     @default("USD")
+  
+  // Job details
+  duration     String
+  deadline     DateTime?
+  skills       String[]
+  requirements String[]
+  
+  // Status
+  status       JobStatus  @default(OPEN)
+  
+  // Relationships
+  applications Application[]
+  
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@map("jobs")
+}
+
+model Application {
+  id               String            @id @default(cuid())
+  jobId            String
+  job              Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  freelancerId     String
+  freelancer       User              @relation("FreelancerApplications", fields: [freelancerId], references: [id], onDelete: Cascade)
+  
+  coverLetter      String
+  proposedRate     Float
+  estimatedDuration String
+  portfolio        String?
+  
+  status           ApplicationStatus @default(PENDING)
+  
+  appliedAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@unique([jobId, freelancerId])
+  @@map("applications")
+}
+
+model Review {
+  id           String   @id @default(cuid())
+  fromUserId   String
+  fromUser     User     @relation("ReviewSender", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId     String
+  toUser       User     @relation("ReviewReceiver", fields: [toUserId], references: [id], onDelete: Cascade)
+  
+  rating       Int      // 1-5 stars
+  comment      String?
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([fromUserId, toUserId])
+  @@map("reviews")
+}
+
+enum UserType {
+  FREELANCER
+  CLIENT
+  BOTH
+}
+
+enum BudgetType {
+  FIXED
+  HOURLY
+}
+
+enum JobStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
