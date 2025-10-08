@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -13,6 +13,20 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // Ensure CSRF token present if user lands directly on /login (bypassing layout bootstrap timing)
+  useEffect(() => {
+    const has = typeof document !== 'undefined' && document.cookie.split('; ').some(c => c.startsWith('csrf_token='));
+    if (!has) {
+      fetch('/api/auth/nonce', { credentials: 'include' }).catch(() => {});
+    }
+  }, []);
+
+  function getCsrfFromCookie() {
+    if (typeof document === 'undefined') return null;
+    const m = document.cookie.split('; ').find(c => c.startsWith('csrf_token='));
+    return m ? decodeURIComponent(m.split('=')[1]) : null;
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
@@ -20,9 +34,18 @@ export default function LoginPage() {
     setSuccess(false);
     setLoading(true);
     try {
+      // Try to ensure CSRF first if still missing
+      let csrf = getCsrfFromCookie();
+      if (!csrf) {
+        await fetch('/api/auth/nonce', { credentials: 'include' }).catch(() => {});
+        csrf = getCsrfFromCookie();
+      }
+      const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+      if (csrf) headers['X-CSRF-Token'] = csrf;
       const res = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers,
         body: JSON.stringify({ emailOrUsername, password }),
       });
       const data = await res.json();
