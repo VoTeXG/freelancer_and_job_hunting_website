@@ -299,6 +299,7 @@ Phase 5 will be declared COMPLETE when all of the following are true:
 - [x] Server-Timing enrichment (jobs endpoint DB timings)
 - [x] Admin health endpoint (`/api/admin/health`) with DB + migration count
 - [x] Usage funnels / events (framework + initial events: jobs.list, jobs.list.error, escrow.action)
+- [x] Internal metrics endpoint + lightweight in-memory dashboard (`/admin/metrics`) for counters & recent events
 - [ ] Latency & error budget dashboard (basic thresholds)
 - [ ] Add cache timing segments once caching layer introduced
 

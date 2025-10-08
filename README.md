@@ -45,6 +45,7 @@ A modern, decentralized freelance platform built with Next.js, TypeScript, and W
 - **Git** - Version control
 - **Sentry (optional)** - Error tracking & performance tracing
 - **Usage Events (optional)** - Lightweight analytics (console + optional PostHog) via `recordEvent` & `AnalyticsProvider`
+- **In-Memory Metrics (dev)** - Ephemeral counters & recent events at `/admin/metrics`
 
 ## 🚀 Getting Started
 
@@ -74,6 +75,8 @@ A modern, decentralized freelance platform built with Next.js, TypeScript, and W
    SENTRY_DSN=your_sentry_dsn  # optional
    NEXT_PUBLIC_POSTHOG_KEY=phc_XXXX   # optional (usage events)
    NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com  # optional override for usage events
+   # Admin wallets (comma-separated) to enable metrics/health endpoints scope
+   ADMIN_WALLETS=0xAdminWallet1,0xAdminWallet2
    ```
 
 4. **Run development server**
@@ -217,7 +220,21 @@ Troubleshooting “Missing CSRF token”:
    1. Start dev server
    2. Run `npm run budget:responses`
 
-   ## 🔎 Observability
+    ## 🔎 Observability
+    ### Usage Events & Metrics
+    - `recordEvent(name, payload?)` server & client utility logs structured JSON to console and optional PostHog (if `NEXT_PUBLIC_POSTHOG_KEY`).
+    - Events automatically increment in-memory counters & a recent-events ring buffer.
+    - Admin metrics endpoint: `GET /api/admin/metrics` (requires `admin:all` scope) returns:
+       - `counters` (e.g., `events.total`, `events.error`, `event.jobs.list`)
+       - `events.error_rate`
+       - `recentEvents` (most recent first, capped at 200)
+    - Dashboard UI at `/admin/metrics` polls every 5s by default (toggleable) and shows counters + last 100 events.
+    - Intended for local/dev operational insight prior to adopting a persistent metrics backend (Prometheus / OpenTelemetry collector).
+
+    Example console event line:
+    ```json
+    {"ts":"2025-10-08T10:15:30.123Z","type":"event","name":"jobs.list","payload":{"count":10,"total":42,"page":1}}
+    ```
 
    - Every API response includes correlation and basic timing headers:
       - `X-Request-Id` — request correlation ID (propagates from proxies if present)

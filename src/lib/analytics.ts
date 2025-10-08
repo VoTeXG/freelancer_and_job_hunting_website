@@ -16,6 +16,8 @@ class ConsoleDestination implements AnalyticsDestination {
 }
 
 let posthogClient: any = null;
+import { recordMetricEvent } from './metrics';
+
 function initPosthog() {
   if (posthogClient || typeof window === 'undefined') return;
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
@@ -43,6 +45,8 @@ if (process.env.NEXT_PUBLIC_POSTHOG_KEY) {
 }
 
 export function recordEvent(name: string, payload?: EventPayload) {
+  // Feed metrics aggregator (always on in server context)
+  try { recordMetricEvent(name, payload); } catch { /* noop */ }
   for (const d of destinations) {
     try { d.send(name, payload); } catch { /* ignore */ }
   }
