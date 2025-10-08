@@ -300,6 +300,8 @@ Phase 5 will be declared COMPLETE when all of the following are true:
 - [x] Admin health endpoint (`/api/admin/health`) with DB + migration count
 - [x] Usage funnels / events (framework + initial events: jobs.list, jobs.list.error, escrow.action)
 - [x] Internal metrics endpoint + lightweight in-memory dashboard (`/admin/metrics`) for counters & recent events
+- [x] Latency histograms (with `withLatency` helper; jobs list, escrow action, metrics endpoint instrumented)
+- [x] Prometheus text exporter (`/api/admin/metrics.prom`) for counters + histograms
 - [ ] Latency & error budget dashboard (basic thresholds)
 - [ ] Add cache timing segments once caching layer introduced
 

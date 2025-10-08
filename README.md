@@ -228,8 +228,45 @@ Troubleshooting “Missing CSRF token”:
        - `counters` (e.g., `events.total`, `events.error`, `event.jobs.list`)
        - `events.error_rate`
        - `recentEvents` (most recent first, capped at 200)
+       - `histograms` (latency distributions described below)
     - Dashboard UI at `/admin/metrics` polls every 5s by default (toggleable) and shows counters + last 100 events.
     - Intended for local/dev operational insight prior to adopting a persistent metrics backend (Prometheus / OpenTelemetry collector).
+
+    #### Latency Histograms (in-memory)
+    - Automatic histogram collection for instrumented API paths via `withLatency(name, fn)` helper (`src/lib/metrics.ts`).
+    - Default bucket boundaries (ms): `[5,10,25,50,75,100,150,250,400,600,800,1000,1500,2000,3000,5000,+Inf]`.
+    - Current instrumentation:
+      - `api.jobs.list` (GET /api/jobs)
+      - `api.escrow.action` (PATCH /api/jobs/:id/escrow)
+      - `api.admin.metrics.json` (GET /api/admin/metrics)
+      - Additional endpoints can opt-in by wrapping logic with `withLatency('api.xyz', async () => { ... })`.
+    - Snapshot JSON shape for a histogram entry:
+      ```jsonc
+      {
+        "name": "latency.api.jobs.list",
+        "buckets": [ { "le": 5, "count": 2 }, { "le": 10, "count": 5 }, { "le": "+Inf", "count": 17 } ],
+        "sum": 1234.56,
+        "count": 17,
+        "min": 3.1,
+        "max": 210.4,
+        "avg": 72.62
+      }
+      ```
+
+    #### Prometheus Exporter
+    - Text exposition endpoint: `GET /api/admin/metrics.prom` (same auth as JSON metrics endpoint).
+    - Emits counters and histograms in basic Prometheus format (no labels yet, each histogram yields `_bucket`, `_count`, `_sum`).
+    - Example snippet:
+      ```
+      # TYPE latency_api_jobs_list histogram
+      latency_api_jobs_list_bucket{le="5"} 2
+      latency_api_jobs_list_bucket{le="10"} 5
+      ...
+      latency_api_jobs_list_bucket{le="+Inf"} 17
+      latency_api_jobs_list_count 17
+      latency_api_jobs_list_sum 1234.56
+      ```
+    - Intended for development / early ops; replace with a proper metrics SDK (OpenTelemetry) for production-grade label support and remote aggregation.
 
     Example console event line:
     ```json

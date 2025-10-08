@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/lib/auth';
-import { getMetricsSnapshot, withLatency } from '@/lib/metrics';
-import { withCommonHeaders, preflightResponse } from '@/lib/apiHeaders';
+import { renderPrometheus } from '@/lib/metrics';
+import { preflightResponse, withCommonHeaders } from '@/lib/apiHeaders';
 
 export async function OPTIONS() { return preflightResponse(); }
 
@@ -16,8 +16,8 @@ export async function GET(request: NextRequest) {
     if (!access || !access.scope?.includes('admin:all')) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
-    const snapshot = await withLatency('api.admin.metrics.json', async () => getMetricsSnapshot());
-    const res = NextResponse.json({ success: true, metrics: snapshot });
+    const body = renderPrometheus();
+    const res = new NextResponse(body, { status: 200, headers: { 'Content-Type': 'text/plain; version=0.0.4' } });
     return withCommonHeaders(res);
   } catch {
     return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 });

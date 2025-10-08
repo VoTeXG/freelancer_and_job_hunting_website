@@ -10,191 +10,190 @@ import { verifyCsrf, sanitizeText, sanitizeStringArray, ensureJson } from '@/lib
 import { loggerWithRequest } from '@/lib/logger';
 import { ServerTiming, withTiming } from '@/lib/timing';
 import { recordEvent } from '@/lib/analytics';
+import { withLatency } from '@/lib/metrics';
 
 export async function OPTIONS() { return preflightResponse(); }
 
 // Get all jobs with filtering and pagination
 export async function GET(request: NextRequest) {
-  const requestId = request.headers.get('x-request-id') || undefined;
-  const log = loggerWithRequest(requestId).child({ route: 'jobs_list' });
-  const timing = new ServerTiming();
-  try {
-    const { searchParams } = new URL(request.url);
-    
-    // Extract query parameters
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+  return withLatency('api.jobs.list', async () => {
+    const requestId = request.headers.get('x-request-id') || undefined;
+    const log = loggerWithRequest(requestId).child({ route: 'jobs_list' });
+    const timing = new ServerTiming();
+    try {
+      const { searchParams } = new URL(request.url);
+      
+      // Extract query parameters
+      const page = parseInt(searchParams.get('page') || '1');
+      const limit = parseInt(searchParams.get('limit') || '10');
   const search = searchParams.get('search') || '';
-    const category = searchParams.get('category') || '';
+      const category = searchParams.get('category') || '';
   const budgetType = searchParams.get('budgetType') || '';
   const sort = (searchParams.get('sort') || 'recent').toLowerCase();
   const skillsParam = searchParams.get('skills') || '';
   const selectMode = (searchParams.get('select') || '').toLowerCase(); // '' | 'basic'
-    const minBudget = searchParams.get('minBudget');
-    const maxBudget = searchParams.get('maxBudget');
-    const clientOnly = searchParams.get('clientOnly') === 'true';
-    
-    // Build where clause
-    const where: any = {
-      status: 'OPEN',
-    };
+      const minBudget = searchParams.get('minBudget');
+      const maxBudget = searchParams.get('maxBudget');
+      const clientOnly = searchParams.get('clientOnly') === 'true';
+      
+      // Build where clause
+      const where: any = {
+        status: 'OPEN',
+      };
 
-    // Add search filter
-    if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    // Add budget type filter
-    if (budgetType && (budgetType === 'FIXED' || budgetType === 'HOURLY')) {
-      where.budgetType = budgetType;
-    }
-
-    // Skills filter (comma separated list) - match any of the provided skills
-    if (skillsParam) {
-      const skillList = skillsParam.split(',').map(s => s.trim()).filter(Boolean);
-      if (skillList.length > 0) {
-        where.skills = { hasSome: skillList };
+      // Add search filter
+      if (search) {
+        where.OR = [
+          { title: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ];
       }
-    }
 
-    // Add budget range filter
-    if (minBudget || maxBudget) {
-      where.budgetAmount = {};
-      if (minBudget) {
-        where.budgetAmount.gte = parseFloat(minBudget);
+      // Add budget type filter
+      if (budgetType && (budgetType === 'FIXED' || budgetType === 'HOURLY')) {
+        where.budgetType = budgetType;
       }
-      if (maxBudget) {
-        where.budgetAmount.lte = parseFloat(maxBudget);
-      }
-    }
 
-    // For client dashboard - filter by client ID
-    if (clientOnly) {
-      const authHeader = request.headers.get('authorization');
-      if (authHeader?.startsWith('Bearer ')) {
-        const token = authHeader.split(' ')[1];
-        try {
-          const access = verifyAccessToken(token);
-          if (!access) throw new Error('invalid');
-          where.clientId = access.sub;
-          delete where.status; // Show all statuses for client's own jobs
-        } catch (error) {
-          return NextResponse.json(
-            { success: false, error: 'Invalid token' },
-            { status: 401 }
-          );
+      // Skills filter (comma separated list) - match any of the provided skills
+      if (skillsParam) {
+        const skillList = skillsParam.split(',').map(s => s.trim()).filter(Boolean);
+        if (skillList.length > 0) {
+          where.skills = { hasSome: skillList };
         }
       }
-    }
 
-    // Calculate pagination
-    const skip = (page - 1) * limit;
+      // Add budget range filter
+      if (minBudget || maxBudget) {
+        where.budgetAmount = {};
+        if (minBudget) {
+          where.budgetAmount.gte = parseFloat(minBudget);
+        }
+        if (maxBudget) {
+          where.budgetAmount.lte = parseFloat(maxBudget);
+        }
+      }
 
-    // Execute queries in parallel
-    const jobsPromise = withTiming(timing, 'db_jobs', () => prisma.job.findMany({
-        where,
-        // Cast to any to allow newly migrated escrow fields while TS JobSelect not yet reflecting them (editor cache issue)
-        select: ({
-          id: true,
-          title: true,
-          description: true,
-          budgetAmount: true,
-          budgetType: true,
-          currency: true,
-          duration: true,
-          skills: true,
-          status: true,
-          createdAt: true,
-          deadline: true,
-          useBlockchain: true,
-          escrowDeployed: true,
-          escrowPending: true,
-          escrowDeploymentAttempts: true,
-          escrowOnChainId: true,
-          client: {
-            select: {
-              id: true,
-              username: true,
-              profile: {
-                select: {
-                  rating: true,
-                  completedJobs: true,
+      // For client dashboard - filter by client ID
+      if (clientOnly) {
+        const authHeader = request.headers.get('authorization');
+        if (authHeader?.startsWith('Bearer ')) {
+          const token = authHeader.split(' ')[1];
+          try {
+            const access = verifyAccessToken(token);
+            if (!access) throw new Error('invalid');
+            where.clientId = access.sub;
+            delete where.status; // Show all statuses for client's own jobs
+          } catch (error) {
+            return NextResponse.json(
+              { success: false, error: 'Invalid token' },
+              { status: 401 }
+            );
+          }
+        }
+      }
+
+      // Calculate pagination
+      const skip = (page - 1) * limit;
+
+      // Execute queries in parallel
+      const jobsPromise = withTiming(timing, 'db_jobs', () => prisma.job.findMany({
+          where,
+          // Cast to any to allow newly migrated escrow fields while TS JobSelect not yet reflecting them (editor cache issue)
+          select: ({
+            id: true,
+            title: true,
+            description: true,
+            budgetAmount: true,
+            budgetType: true,
+            currency: true,
+            duration: true,
+            skills: true,
+            status: true,
+            createdAt: true,
+            deadline: true,
+            useBlockchain: true,
+            escrowDeployed: true,
+            escrowPending: true,
+            escrowDeploymentAttempts: true,
+            escrowOnChainId: true,
+            client: {
+              select: {
+                id: true,
+                username: true,
+                profile: {
+                  select: {
+                    rating: true,
+                    completedJobs: true,
+                  },
                 },
               },
             },
-          },
-          _count: { select: { applications: true } },
-        }) as any,
-        orderBy: (() => {
-          switch (sort) {
-            case 'budget':
-              return { budgetAmount: 'desc' } as const;
-            case 'deadline':
-              return { deadline: 'asc' } as const;
-            default:
-              return { createdAt: 'desc' } as const;
-          }
-        })(),
-        skip,
-        take: limit,
-      }) as any);
-    const countPromise = withTiming(timing, 'db_count', () => prisma.job.count({ where }));
-    const [jobsRaw, totalCount] = await Promise.all([jobsPromise, countPromise]);
+            _count: { select: { applications: true } },
+          }) as any,
+          orderBy: (() => {
+            switch (sort) {
+              case 'budget':
+                return { budgetAmount: 'desc' } as const;
+              case 'deadline':
+                return { deadline: 'asc' } as const;
+              default:
+                return { createdAt: 'desc' } as const;
+            }
+          })(),
+          skip,
+          take: limit,
+        }) as any);
+      const countPromise = withTiming(timing, 'db_count', () => prisma.job.count({ where }));
+      const [jobsRaw, totalCount] = await Promise.all([jobsPromise, countPromise]);
 
-    const jobs = selectMode === 'basic'
-      ? (jobsRaw as any[]).map((j: any) => ({
-          id: j.id,
-          title: j.title,
-          budgetAmount: j.budgetAmount,
-          budgetType: j.budgetType,
-          currency: j.currency,
-          skills: (j.skills || []).slice(0,6),
-          createdAt: j.createdAt,
-          client: {
-            id: j.client?.id,
-            username: j.client?.username,
-            rating: j.client?.profile?.rating || 0,
-          },
-          applications: j._count?.applications || 0,
-          descriptionPreview: j.description?.slice(0,160) || '',
-        }))
-      : jobsRaw;
+      const jobs = selectMode === 'basic'
+        ? (jobsRaw as any[]).map((j: any) => ({
+            id: j.id,
+            title: j.title,
+            budgetAmount: j.budgetAmount,
+            budgetType: j.budgetType,
+            currency: j.currency,
+            skills: (j.skills || []).slice(0,6),
+            createdAt: j.createdAt,
+            client: {
+              id: j.client?.id,
+              username: j.client?.username,
+              rating: j.client?.profile?.rating || 0,
+            },
+            applications: j._count?.applications || 0,
+            descriptionPreview: j.description?.slice(0,160) || '',
+          }))
+        : jobsRaw;
 
-    const totalPages = Math.ceil(totalCount / limit);
-    const isAuthedClientView = Boolean(clientOnly && request.headers.get('authorization'));
+      const totalPages = Math.ceil(totalCount / limit);
+      const isAuthedClientView = Boolean(clientOnly && request.headers.get('authorization'));
 
-    const baseResp = {
-    success: true,
-    jobs,
-    pagination: {
-      currentPage: page,
-      totalPages,
-      totalCount,
-      hasNextPage: page < totalPages,
-      hasPrevPage: page > 1,
-    },
-    meta: { mode: selectMode || 'full' }
-  };
-    const response = respondWithJSONAndETag(request, baseResp, { headers: { 'Cache-Control': isAuthedClientView ? 'private, max-age=0, no-cache' : 'public, max-age=30, s-maxage=60' } });
-    // Merge timing
-    const existing = response.headers.get('Server-Timing');
-    response.headers.set('Server-Timing', timing.mergeInto(existing));
-  const jobCount = (jobsRaw as any[]).length;
-  log.info('jobs_list.query.success', { count: jobCount, totalCount });
-  recordEvent('jobs.list', { count: jobCount, total: totalCount, page, limit, basic: selectMode === 'basic' });
-    return response;
-
-  } catch (error) {
-    log.error('jobs_list.query.error', { err: (error as any)?.message });
-    recordEvent('jobs.list.error', { message: (error as any)?.message });
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
+      const baseResp = {
+      success: true,
+      jobs,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalCount,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+      meta: { mode: selectMode || 'full' }
+    };
+      const response = respondWithJSONAndETag(request, baseResp, { headers: { 'Cache-Control': isAuthedClientView ? 'private, max-age=0, no-cache' : 'public, max-age=30, s-maxage=60' } });
+      // Merge timing
+      const existing = response.headers.get('Server-Timing');
+      response.headers.set('Server-Timing', timing.mergeInto(existing));
+      const jobCount = (jobsRaw as any[]).length;
+      log.info('jobs_list.query.success', { count: jobCount, totalCount });
+      recordEvent('jobs.list', { count: jobCount, total: totalCount, page, limit, basic: selectMode === 'basic' });
+      return response;
+    } catch (error) {
+      log.error('jobs_list.query.error', { err: (error as any)?.message });
+      recordEvent('jobs.list.error', { message: (error as any)?.message });
+      return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
+    }
+  });
 }
 
 // Create a new job
