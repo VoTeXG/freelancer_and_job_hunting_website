@@ -9,7 +9,7 @@ import '@/lib/env';
 
 const LoginSchema = z.object({
   emailOrUsername: z.string().min(3),
-  password: z.string().min(8),
+  password: z.string().min(5),
 });
 
 export async function OPTIONS() { return preflightResponse(); }

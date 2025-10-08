@@ -10,7 +10,8 @@ import '@/lib/env';
 const RegisterSchema = z.object({
   email: z.string().email(),
   username: z.string().min(3).max(32),
-  password: z.string().min(8).max(100),
+  // NOTE: lowered to min(5) to allow seeded 'admin' password in dev. Increase to 8+ in production.
+  password: z.string().min(5).max(100),
   userType: z.enum(['FREELANCER','CLIENT','BOTH']).optional(),
 });
 
