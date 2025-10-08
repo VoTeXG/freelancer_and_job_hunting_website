@@ -32,6 +32,8 @@ model User {
   applications  Application[]   @relation("FreelancerApplications")
   sentReviews   Review[]        @relation("ReviewSender")
   receivedReviews Review[]      @relation("ReviewReceiver")
+  drafts        JobDraft[]
+  refreshTokens RefreshToken[]
 
   @@map("users")
 }
@@ -65,6 +67,9 @@ model Profile {
   updatedAt    DateTime     @updatedAt
 
   @@map("profiles")
+  @@index([hourlyRate])
+  @@index([experience])
+  @@index([rating])
 }
 
 model Job {
@@ -87,6 +92,16 @@ model Job {
   
   // Status
   status       JobStatus  @default(OPEN)
+  // Escrow / blockchain integration flags
+  useBlockchain             Boolean   @default(false)
+  escrowDeployed            Boolean   @default(false)
+  escrowPending             Boolean   @default(false)
+  escrowDeploymentAttempts  Int       @default(0)
+  escrowOnChainId           Int?
+  // Rollback / cancellation tracking
+  escrowRollbackRequested   Boolean   @default(false)
+  escrowRollbackReason      String?
+  escrowCancelledAt         DateTime?
   
   // Relationships
   applications Application[]
@@ -95,6 +110,13 @@ model Job {
   updatedAt    DateTime   @updatedAt
 
   @@map("jobs")
+  @@index([status])
+  @@index([clientId])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([escrowPending])
+  @@index([escrowDeployed])
+  @@index([escrowRollbackRequested])
 }
 
 model Application {
@@ -118,6 +140,20 @@ model Application {
   @@map("applications")
 }
 
+// Server-side persisted job posting drafts
+model JobDraft {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    User     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  data      Json     // arbitrary partial job form structure
+  published Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId, updatedAt])
+  @@map("job_drafts")
+}
+
 model Review {
   id           String   @id @default(cuid())
   fromUserId   String
@@ -133,6 +169,24 @@ model Review {
 
   @@unique([fromUserId, toUserId])
   @@map("reviews")
+}
+
+// Persistent refresh tokens for rotation & revocation
+model RefreshToken {
+  tokenHash    String   @id
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent    String?
+  ip           String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@map("refresh_tokens")
 }
 
 enum UserType {

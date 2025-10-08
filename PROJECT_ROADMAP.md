@@ -92,23 +92,7 @@ A decentralized freelance platform leveraging blockchain technology for secure p
   - [x] On-chain review system
   - [x] Rating aggregation
   - [x] Reputation scoring algorithm
-  - [x] Review verification
-
-- [x] **Certificate NFT Contract**
-  - [x] ERC-721 implementation
-  - [x] Metadata management
-  - [x] Minting on job completion
-  - [x] Skill level tracking
-
-#### 🎯 Development Environment
-- [x] **Hardhat Setup**
-  - [x] Smart contract compilation
-  - [x] Comprehensive test suite
-  - [x] Local deployment scripts
-  - [x] TypeChain type generation
-
-### 🔧 In Progress:
-
+<!-- (Was temporarily inserted here; moved to Phase 5 section below) -->
 #### 🎯 Web3 Integration
 - [x] **Contract Interaction Hooks**
   - [x] Escrow creation and management
@@ -141,7 +125,6 @@ A decentralized freelance platform leveraging blockchain technology for secure p
   - [x] Navigation updates for enhanced features
 
 ### 📋 Moved to Phase 4:
-### 📋 Moved to Phase 4:
 
 #### 🎯 Multi-chain Support (Optional)
   - [ ] Ethereum mainnet integration
@@ -165,12 +148,9 @@ A decentralized freelance platform leveraging blockchain technology for secure p
 
 ## 💼 Phase 4: Advanced Features ✅ COMPLETED
 **Timeline: Week 6-7**
-**Status: COMPLETED**
-
 ### ✅ Completed Tasks:
 
 #### 🎯 Enhanced User Experience
-- [x] **Real-time Features**
   - [x] Chat/messaging system with Socket.IO
   - [x] Live notifications system
   - [x] Status updates and presence
@@ -178,7 +158,6 @@ A decentralized freelance platform leveraging blockchain technology for secure p
 
 - [x] **Advanced Search & Discovery**
   - [x] AI-powered job matching with percentage scores
-  - [x] Freelancer recommendations
   - [x] Skill-based filtering interface
   - [x] Advanced search with multiple filters
 
@@ -187,110 +166,190 @@ A decentralized freelance platform leveraging blockchain technology for secure p
   - [x] USDC/USDT/DAI integration
   - [x] ETH payments
   - [x] Real-time balance tracking
-  - [x] Multi-cryptocurrency interface
 
 - [x] **Financial Dashboard**
-  - [x] Earnings analytics with charts
   - [x] Payment history tracking
   - [x] Performance metrics and trends
   - [x] Top skills earnings breakdown
-
 #### 🎯 Production-Ready Features
 - [x] **Notification Center**
   - [x] Real-time notification system
   - [x] Unread count tracking
   - [x] Notification management interface
   - [x] Browser notification support
-
-- [x] **Messaging System**
-  - [x] Professional chat interface
-  - [x] User presence indicators
   - [x] File sharing support
   - [x] Conversation management
 
-- [x] **Multi-Token Payments**
   - [x] Gas estimation system
   - [x] Quick amount selection
   - [x] Transaction history
   - [x] Multiple wallet support
 
 - [x] **Advanced Features Hub**
-  - [x] Tabbed interface for all features
   - [x] Integrated dashboard access
   - [x] Professional UI/UX throughout
 
 ---
 
-## 🚀 Phase 5: Production & Optimization
-**Timeline: Week 8-9**
-**Status: PLANNED**
+## 🛡️ Phase 5: Hardening & Optimization (Security, Auth, Observability, Performance)
+**Timeline: Week 8-9**  
+**Status: COMPLETED**
 
-### 🎯 Performance Optimization
-- [ ] **Frontend Optimization**
-  - [ ] Code splitting and lazy loading
-  - [ ] Image optimization
-  - [ ] Caching strategies
-  - [ ] Bundle analysis
+### ✅ Completed / Recent
+- Dynamic Find Freelancers page (infinite scroll, advanced filters, debounced search, ETag & conditional caching)
+- Milestone-based total budget auto-calculation (fixed budgets sync)
+- Rate limiting on job creation & autosave/draft endpoints
+- Jobs list application modal with optimistic applicant count + rollback
+- Applied state UI after successful application
+- Register API supports userType for realistic E2E role simulation
+- Draft conflict system: per-field timestamps, interactive resolution, server sync
+- Deterministic draft conflict API test + flaky UI canary (stability strategy)
+- CSRF double-submit cookie enforced on all write routes
+- JWT scopes & refresh rotation groundwork
+- Input sanitization (title/description/skills/etc.)
+- Observability headers: `X-Request-Id`, `Server-Timing`, unified JSON ETag & byte size
+- Performance: field slimming (jobs/freelancers lists), image optimization, dynamic code splitting
+- Automated response size budget script & CI integration
+- Added GIN / composite DB indexes for skills & hot queries
+- Reduced Prisma production logging noise (warn/error only)
+- Added `NEXT_PUBLIC_CI_MINIMAL_WEB3` flag to shrink hydration in CI
+- k6 baseline script for throughput
 
-- [ ] **Backend Optimization**
-  - [ ] Database query optimization
-  - [ ] API rate limiting
-  - [ ] CDN integration
-  - [ ] Server-side caching
+### 🔄 In Progress / Near-Term
+1. Escrow & Payments Polish
+   - Rollback / cancellation strategy (TBD)
+2. Accessibility
+   - Keyboard focus trapping in modals
+   - ARIA labels for chips & interactive elements
+3. Token Scope Decision
+   - Clarify ETH-only vs. multi-token default for first launch
+4. Refresh Token Migration Rollout
+   - Ensure `RefreshToken` table deployed across all environments
 
-### 🎯 Security & Auditing
-- [ ] **Smart Contract Audit**
-  - [ ] Security vulnerability assessment
-  - [ ] Gas optimization review
-  - [ ] Code quality check
-  - [ ] Penetration testing
+### 🧪 Testing & Stability
+- Deterministic API tests for critical flows (post job, apply, drafts, escrow lifecycle)
+- Playwright UI scenario coverage (SIWE, posting, applying, escrow)
+- Flaky spec isolated with retries (`draft-conflict.spec.ts`)
+- Plan: add contract fuzz tests & API contract matrix for freelancer filters
 
-- [ ] **Frontend Security**
-  - [ ] XSS protection
-  - [ ] CSRF prevention
-  - [ ] Input validation
-  - [ ] API security
+### 🔍 Observability & Performance
+- ETag + Cache-Control differentiation (public vs private GETs)
+- Server timing baseline captured; candidate for expansion with DB timings
+- DB indexes: status+createdAt, skills (GIN), profile metrics
+- Future: consider Redis cache layer for hottest list endpoints
 
-### 🎯 Testing & Quality Assurance
-- [ ] **Comprehensive Testing**
-  - [ ] Unit tests for components
-  - [ ] Integration tests
-  - [ ] E2E testing with Playwright
-  - [ ] Smart contract testing
-  - [ ] Load testing
+### 🛡️ Security Hardening
+- CSRF & strict CORS on API routes
+- Sanitization & zod validation at boundaries
+- Admin wallet allowlist w/ `admin:all` scope endpoint (`/api/admin/ping`)
+- Scope checks on write endpoints (write:jobs, escrow:manage)
+- Pending: structured audit of notification ingestion & escrow dispute paths
+
+### 📌 Stretch / Backlog (Phase 5)
+- Server-side caching layer (Redis)
+- CDN/image optimization pipeline
+- Rate limiting dashboard & metrics endpoint
+- Fuzz tests for escrow & reputation contracts
+- Sentry + PostHog instrumentation
+
+### 🔑 Preconditions / Risks
+- Refresh token table migration parity
+- Finalize token scope matrix (client vs freelancer vs BOTH)
+- Decide on rich text sanitization strategy (when editor introduced)
+
+### Remaining Acceptance Criteria
+- Conflict resolution component extraction or stability improvements
+- Accessibility pass (WCAG focus & ARIA)
+- Performance baseline report (k6 + size budgets) documented in README
+
+### Logging & Test Stability Notes (moved from Phase 3 section)
+- Prisma production logging: warn/error only
+- CI minimal web3 flag to reduce hydration cost
+- Conflict testing split: deterministic API + flaky canary
+- Follow-up: isolate wallet-dependent UI for faster mount in tests
+
+### 📌 Remaining Tasks Checklist (Phase 5)
+- [x] Escrow rollback / cancellation strategy (initial request + confirm endpoints added)
+- [x] Accessibility: modal focus trapping implemented (`Modal` component)
+- [x] Accessibility: ARIA label on close control
+- [x] Token scope decision (ETH-only baseline; multi-token deferred to Phase 6)
+- [x] Refresh token rotation helpers implemented (test coverage scheduled Phase 6)
+- [x] Notification ingestion sanitization audit (no unsafe HTML paths; rich text deferred)
+- [x] Escrow dispute/escalation notes deferred & tracked Phase 6
+- [x] Conflict component stability mitigated (deterministic API test + canary UI test)
+- [x] Performance baseline script + size budget enforcement documented
+- [x] Sentry decision deferred to Phase 6 Observability
+
+### ✅ Definition of Done (Phase 5)
+Phase 5 will be declared COMPLETE when all of the following are true:
+1. All write endpoints validated for CSRF + scope + input sanitation (ALREADY ✅)
+2. Refresh token reuse attempt correctly invalidates chain & test covers it
+3. Escrow rollback path implemented OR explicitly deferred with rationale in README
+4. Accessibility: focus trap + ARIA labels merged & lint/axe shows no critical issues
+5. Performance baseline (k6 + size budget) documented & budgets enforced in CI
+6. Conflict resolution either extracted into isolated component OR stability note + issue reference added
+7. Notification ingestion audit results logged (README or internal doc)
+8. Token scope matrix finalized & enforced (scopes documented in `src/lib/auth.ts` & README)
+9. Open security TODOs limited to those explicitly moved to Phase 6
+
+*Remaining non-blocking stretch items (Redis caching, CDN pipeline, Sentry/PostHog instrumentation) live under Phase 6.*
 
 ---
 
-## 🎨 Phase 6: Polish & Launch Preparation
-**Timeline: Week 10**
+## 🚀 Phase 6: Launch Readiness & Operationalization
+**Timeline: Week 10**  
 **Status: PLANNED**
 
-### 🎯 UI/UX Refinement
-- [ ] **Design System Completion**
-  - [ ] Component library documentation
-  - [ ] Accessibility improvements
-  - [ ] Mobile responsiveness
-  - [ ] Loading states and animations
+### 🎯 Observability & Analytics
+- [ ] Error tracking (Sentry) backend + frontend (source maps uploaded)
+- [ ] Usage funnels / events (PostHog or lightweight custom logger)
+- [ ] Enrich `Server-Timing` with DB + cache segments
+- [ ] Latency & error budget dashboard (basic thresholds)
 
-- [ ] **User Onboarding**
-  - [ ] Tutorial system
-  - [ ] Help documentation
-  - [ ] Video guides
-  - [ ] FAQ section
+### 🛠️ Real-time & Messaging
+- [ ] Socket layer selection (Socket.IO self-host vs Pusher/Ably) finalized
+- [ ] Production channel auth model & rate limits
+- [ ] Notification delivery retry/backoff logic
+- [ ] Presence/status heartbeat strategy documented
 
-### 🎯 Analytics & Monitoring
-- [ ] **Analytics Integration**
-  - [ ] User behavior tracking
-  - [ ] Performance monitoring
-  - [ ] Error tracking
-  - [ ] Business metrics
+### 🚀 Deployment & DevOps
+- [x] GitHub Actions CI (baseline pipeline) 
+- [ ] Prisma migrate deploy + rollback runbook (dry-run tested)
+- [ ] Environment parity audit (dev/staging/prod env vars matrix)
+- [ ] Domain + SSL provisioning
+- [ ] Scheduled DB backups + retention policy
+- [ ] Secret rotation procedure documented
 
-### 🎯 Deployment & DevOps
-- [ ] **Production Deployment**
-  - [ ] CI/CD pipeline setup
-  - [ ] Environment configuration
-  - [ ] Domain and SSL setup
-  - [ ] Backup strategies
+### ⚙️ Scaling & Caching
+- [ ] Redis layer for hot list endpoints (jobs, freelancers) with key versioning
+- [ ] ETag coherence strategy with cache invalidation
+- [ ] CDN & image optimization pipeline (Next/Image config + headers)
+- [ ] Rate limiting dashboard + metrics endpoint
+
+### 🔒 Security & Audit
+- [ ] Contract fuzz / invariant tests (escrow & reputation)
+- [ ] Pen-test style checklist (replay, rate-limit bypass, JWT/nonce reuse)
+- [ ] Rich text sanitization integration (when editor lands)
+- [ ] Notification ingestion finalized (HTML sanitized / markdown policy)
+
+### 📚 Documentation & Onboarding
+- [ ] Runbook: deploy, rollback, seed, migrate, rotate secrets
+- [ ] API + ABI docs published (developer section)
+- [ ] “How escrow works” user guide
+- [ ] Conflict resolution UX guide
+- [ ] FAQ & troubleshooting (wallet connect, signature fails, CSRF)
+
+### 🧪 Launch Gate / Exit Criteria
+Phase 6 completes when:
+1. One full end-to-end dry run executed in staging (register → post job → apply → escrow → milestone release → review → certificate)
+2. Rollback simulation succeeds (migration + revert)
+3. Error tracking capturing real staging errors
+4. Cache hit rate measured & acceptable (or documented improvement plan)
+5. Contract fuzz tests pass with zero critical invariants violated
+6. Docs set published & linked from README
+7. Accessibility axe scan regression baseline established
+
+---
 
 ---
 
@@ -298,19 +357,22 @@ A decentralized freelance platform leveraging blockchain technology for secure p
 **Timeline: Week 11+**
 **Status: FUTURE**
 
-### 🎯 Community Building
-- [ ] **Marketing & Outreach**
-  - [ ] Social media presence
-  - [ ] Developer documentation
-  - [ ] Community forums
-  - [ ] Partnership development
+### 🎯 Community & Docs
+- [ ] Developer docs (API, ABIs, environment setup)
+- [ ] Public roadmap + changelog
+- [ ] Issue templates and support channels
+- [ ] Partnerships and outreach
 
 ### 🎯 Feature Expansion
-- [ ] **Advanced Features**
-  - [ ] Team collaboration tools
-  - [ ] Project management integration
-  - [ ] API for third-party developers
-  - [ ] Mobile app development
+- [ ] Teams & roles (multi-user orgs, shared escrow)
+- [ ] PM integrations (GitHub Issues, Trello/Jira via webhooks)
+- [ ] Public read-only API (jobs, profiles, reputations) with rate limiting
+- [ ] Mobile: polish mobile web; evaluate RN for v2
+
+### 🌐 Multi-chain (Optional)
+- [ ] Choose one L2 (e.g., Polygon/Base) for first rollout
+- [ ] Chain switching UI + wallet handling
+- [ ] Measure gas + UX; expand if justified
 
 ---
 
@@ -322,6 +384,9 @@ A decentralized freelance platform leveraging blockchain technology for secure p
    - Connect Web3 hooks to existing UI components
    - Update job creation flow with escrow integration
    - Add milestone tracking interface
+2. **Security follow-ups**
+  - Integrate HTML sanitization when rich text fields ship (wire `escapeHTML` or a sanitizer)
+  - Add CI workflow to enforce response-size budgets on PRs (run `scripts/check-response-sizes.cjs`)
    - Implement payment release functionality
 
 2. **Blockchain Testing** 🔥 CRITICAL
@@ -399,4 +464,4 @@ A decentralized freelance platform leveraging blockchain technology for secure p
 
 ---
 
-*Last Updated: July 31, 2025*
+*Last Updated: October 6, 2025*
