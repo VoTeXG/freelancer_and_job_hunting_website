@@ -183,8 +183,9 @@ await connectWallet('metaMask');
 - `npm run build` - Build for production
 - `npm run start` - Start production server
 - `npm run lint` - Run ESLint
- - `npm run typecheck` - TypeScript type checks
- - `npm run budget:responses` - Check API response payload budgets (requires dev server)
+- `npm run typecheck` - TypeScript type checks
+- `npm run budget:responses` - Check API response payload budgets (requires dev server)
+- `npm run check:scripts` (if listed) OR `npx tsx scripts/check-scripts.ts` - Verify required script entries & detect parent lockfile conflicts
  - Playwright E2E: `npm run test:e2e` (UI: `npm run test:e2e:ui`)
  - k6 baseline (optional):
     - Install k6 (https://k6.io/docs/get-started/installation/)
