@@ -6,7 +6,7 @@ export interface TimingHandle {
 export class ServerTiming {
   private marks: { key: string; start: number; dur?: number; desc?: string }[] = [];
   mark(key: string, desc?: string): TimingHandle {
-    const entry = { key, start: performance.now(), desc };
+    const entry: { key: string; start: number; dur?: number; desc?: string } = { key, start: performance.now(), desc };
     this.marks.push(entry);
     return {
       end: () => { entry.dur = performance.now() - entry.start; },

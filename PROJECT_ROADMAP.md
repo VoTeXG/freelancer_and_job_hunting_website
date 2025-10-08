@@ -302,7 +302,7 @@ Phase 5 will be declared COMPLETE when all of the following are true:
 - [x] Internal metrics endpoint + lightweight in-memory dashboard (`/admin/metrics`) for counters & recent events
 - [x] Latency histograms (with `withLatency` helper; jobs list, escrow action, metrics endpoint instrumented)
 - [x] Prometheus text exporter (`/api/admin/metrics.prom`) for counters + histograms
-- [ ] Latency & error budget dashboard (basic thresholds)
+ - [x] Latency & error budget dashboard (basic thresholds)
 - [ ] Add cache timing segments once caching layer introduced
 
 ### 🛠️ Real-time & Messaging

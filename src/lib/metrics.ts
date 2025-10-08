@@ -24,6 +24,116 @@ interface HistogramData extends HistogramDefinition {
   max: number;
 }
 
+// ===== Rolling Window SLO Support =====
+// We maintain per-endpoint minute buckets for short (5m) and long (60m) windows.
+interface MinuteBucket {
+  minute: number; // epoch minute (Math.floor(Date.now()/60000))
+  count: number;
+  sum: number;
+  min: number;
+  max: number;
+  // histogram partial counts per bucket boundary + overflow for percentile approximation
+  bucketCounts: number[];
+}
+
+interface EndpointWindows {
+  name: string; // raw latency name e.g. api.jobs.list
+  short: MinuteBucket[]; // size <= SHORT_WINDOW_MINUTES
+  long: MinuteBucket[];  // size <= LONG_WINDOW_MINUTES
+}
+
+const SHORT_WINDOW_MINUTES = 5;
+const LONG_WINDOW_MINUTES = 60;
+// SLO targets (p95 latency in ms) per endpoint
+const LATENCY_SLO_TARGETS: Record<string, number> = {
+  'api.jobs.list': 400,
+  'api.escrow.action': 600,
+  'api.admin.metrics.json': 250,
+};
+const AVAILABILITY_ERROR_RATE_TARGET = 0.01; // 1% error budget
+
+const endpointWindows: Record<string, EndpointWindows> = Object.create(null);
+
+function getOrCreateEndpointWindows(name: string): EndpointWindows {
+  let ew = endpointWindows[name];
+  if (!ew) {
+    ew = endpointWindows[name] = { name, short: [], long: [] };
+  }
+  return ew;
+}
+
+function currentEpochMinute(): number { return Math.floor(Date.now() / 60000); }
+
+function observeRolling(name: string, ms: number, bucketIndex: number, totalBuckets: number) {
+  const ew = getOrCreateEndpointWindows(name);
+  const minute = currentEpochMinute();
+  const apply = (arr: MinuteBucket[], capacity: number) => {
+    let mb = arr[arr.length - 1];
+    if (!mb || mb.minute !== minute) {
+      mb = { minute, count: 0, sum: 0, min: Number.POSITIVE_INFINITY, max: 0, bucketCounts: new Array(totalBuckets).fill(0) };
+      arr.push(mb);
+      // trim old entries beyond capacity
+      while (arr.length > capacity) arr.shift();
+    }
+    mb.count += 1;
+    mb.sum += ms;
+    if (ms < mb.min) mb.min = ms;
+    if (ms > mb.max) mb.max = ms;
+    mb.bucketCounts[bucketIndex] += 1;
+  };
+  apply(ew.short, SHORT_WINDOW_MINUTES);
+  apply(ew.long, LONG_WINDOW_MINUTES);
+}
+
+interface Percentiles { p50: number | null; p95: number | null; p99: number | null; }
+
+function computePercentiles(mergedCounts: number[], bucketBounds: number[], total: number): Percentiles {
+  if (total === 0) return { p50: null, p95: null, p99: null };
+  const targets = { p50: total * 0.5, p95: total * 0.95, p99: total * 0.99 } as const;
+  let running = 0;
+  const result: any = { p50: null, p95: null, p99: null };
+  for (let i = 0; i < mergedCounts.length; i++) {
+    running += mergedCounts[i];
+    const le = i < bucketBounds.length ? bucketBounds[i] : Number.POSITIVE_INFINITY;
+    for (const k of ['p50','p95','p99'] as const) {
+      if (result[k] === null && running >= (targets as any)[k]) {
+        result[k] = le;
+      }
+    }
+  }
+  return result as Percentiles;
+}
+
+function aggregateWindow(buckets: MinuteBucket[], bucketBounds: number[]) {
+  if (buckets.length === 0) return null;
+  let count = 0, sum = 0, min = Number.POSITIVE_INFINITY, max = 0;
+  const merged = new Array(bucketBounds.length + 1).fill(0);
+  for (const b of buckets) {
+    count += b.count;
+    sum += b.sum;
+    if (b.min < min) min = b.min;
+    if (b.max > max) max = b.max;
+    b.bucketCounts.forEach((c, i) => merged[i] += c);
+  }
+  const pct = computePercentiles(merged, bucketBounds, count);
+  return {
+    count,
+    avg: count > 0 ? sum / count : null,
+    min: count > 0 ? min : null,
+    max: count > 0 ? max : null,
+    ...pct,
+  };
+}
+
+function deriveSLOStatus(p95Long: number | null, target: number | undefined, burnRateLong: number | null): 'OK' | 'WATCH' | 'CRITICAL' {
+  if (!target || p95Long === null) return 'OK';
+  const over = p95Long / target;
+  if (burnRateLong !== null && burnRateLong >= 2) return 'CRITICAL';
+  if (over > 1.25) return 'CRITICAL';
+  if (over > 1.1 || (burnRateLong !== null && burnRateLong >= 1)) return 'WATCH';
+  return 'OK';
+}
+
 const counters: CounterMap = Object.create(null);
 const recentEvents: RecentEvent[] = [];
 const MAX_EVENTS = 200;
@@ -59,7 +169,13 @@ function observeHistogram(name: string, valueMs: number, buckets?: number[]) {
   if (valueMs > h.max) h.max = valueMs;
   // find bucket index
   const idx = h.buckets.findIndex(b => valueMs <= b);
-  h.counts[idx === -1 ? h.counts.length - 1 : idx] += 1;
+  const bucketIndex = (idx === -1 ? h.counts.length - 1 : idx);
+  h.counts[bucketIndex] += 1;
+  // Also feed rolling windows for latency.* histograms
+  if (name.startsWith('latency.')) {
+    const raw = name.replace(/^latency\./,'');
+    observeRolling(raw, valueMs, bucketIndex, h.counts.length);
+  }
 }
 
 function inc(name: string, by = 1) {
@@ -129,12 +245,60 @@ export function getMetricsSnapshot() {
     eventsTotal: counters['events.total'] || 0,
   };
   const errorRate = eventsTotal > 0 ? eventsError / eventsTotal : 0;
+  // Availability rolling windows (global)
+  // For now we approximate rolling error rates using the recentEvents ring buffer filtered by window.
+  const now = Date.now();
+  const shortWindowFrom = now - SHORT_WINDOW_MINUTES * 60000;
+  const longWindowFrom = now - LONG_WINDOW_MINUTES * 60000;
+  let shortErrors = 0, shortTotal = 0, longErrors = 0, longTotal = 0;
+  for (const ev of recentEvents) {
+    if (ev.ts >= longWindowFrom) {
+      longTotal++; if (ev.error) longErrors++;
+      if (ev.ts >= shortWindowFrom) { shortTotal++; if (ev.error) shortErrors++; }
+    }
+  }
+  const shortErrorRate = shortTotal > 0 ? shortErrors / shortTotal : 0;
+  const longErrorRate = longTotal > 0 ? longErrors / longTotal : 0;
+  const burnRateShort = shortTotal > 0 ? (shortErrorRate / AVAILABILITY_ERROR_RATE_TARGET) : null;
+  const burnRateLong = longTotal > 0 ? (longErrorRate / AVAILABILITY_ERROR_RATE_TARGET) : null;
+
+  // Derive endpoint SLO data
+  const endpointSLO = Object.keys(endpointWindows).map(name => {
+    const ew = endpointWindows[name];
+    // Use latency histogram bucket boundaries for computation (assume all share DEFAULT_LATENCY_BUCKETS)
+    const hBounds = DEFAULT_LATENCY_BUCKETS;
+    const shortAgg = aggregateWindow(ew.short, hBounds);
+    const longAgg = aggregateWindow(ew.long, hBounds);
+    const target = LATENCY_SLO_TARGETS[name];
+    const status = deriveSLOStatus(longAgg?.p95 ?? null, target, burnRateLong);
+    return {
+      name,
+      targetP95: target || null,
+      short: shortAgg,
+      long: longAgg,
+      status,
+    };
+  }).sort((a,b) => a.name.localeCompare(b.name));
+
+  const availabilityStatus = deriveSLOStatus(longErrorRate * 1000 /* scale just to reuse function threshold logic */, AVAILABILITY_ERROR_RATE_TARGET * 1000, burnRateLong);
   return {
     generatedAt: new Date().toISOString(),
     counters: { ...counters, 'events.error_rate': Number(errorRate.toFixed(4)) },
     recentEvents: [...recentEvents].reverse(),
     limits: { maxRecentEvents: MAX_EVENTS },
     histograms: exportHistograms(),
+    slo: {
+      endpoints: endpointSLO,
+      availability: {
+        targetErrorRate: AVAILABILITY_ERROR_RATE_TARGET,
+        errorRateShort: shortErrorRate,
+        errorRateLong: longErrorRate,
+        burnRateShort,
+        burnRateLong,
+        remainingBudget: AVAILABILITY_ERROR_RATE_TARGET - longErrorRate,
+        status: availabilityStatus,
+      }
+    }
   };
 }
 

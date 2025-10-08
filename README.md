@@ -317,6 +317,16 @@ Troubleshooting “Missing CSRF token”:
     {"ts":"2025-10-08T10:15:30.123Z","type":"event","name":"jobs.list","payload":{"count":10,"total":42,"page":1}}
     ```
 
+      #### Latency & Error Budget Dashboard (SLO View)
+      - Added rolling window SLO computation (5m & 60m) for instrumented endpoints.
+      - Per-endpoint metrics include: p50/p95/p99, avg, sample counts (5m & 60m), target p95, status (OK/WATCH/CRITICAL).
+      - Availability panel derives error rates from recent events (short = 5m, long = 60m) with burn rates vs a 99% success SLO.
+      - Status heuristics:
+         - CRITICAL: p95 > 125% of target OR long burn rate ≥ 2x
+         - WATCH: p95 > 110% of target OR long burn rate ≥ 1x
+         - OK: Below those thresholds
+      - All data is ephemeral (in-memory); restart resets windows. For production adopt persistent metrics + tracing (OpenTelemetry, Prometheus TSDB, etc.).
+
    - Every API response includes correlation and basic timing headers:
       - `X-Request-Id` — request correlation ID (propagates from proxies if present)
       - `Server-Timing: app;dur=<ms>` — simple server-side duration for the request

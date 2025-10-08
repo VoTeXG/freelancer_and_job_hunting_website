@@ -3,7 +3,23 @@ import React, { useEffect, useState } from 'react';
 
 interface MetricCounters { [k: string]: number; }
 interface RecentEvent { ts: number; name: string; payloadSize?: number; error?: boolean }
-interface Snapshot { generatedAt: string; counters: MetricCounters; recentEvents: RecentEvent[]; limits: { maxRecentEvents: number } }
+interface SLOEndpointAgg {
+  name: string;
+  targetP95: number | null;
+  status: 'OK' | 'WATCH' | 'CRITICAL';
+  short: { count: number; avg: number | null; min: number | null; max: number | null; p50: number | null; p95: number | null; p99: number | null } | null;
+  long: { count: number; avg: number | null; min: number | null; max: number | null; p50: number | null; p95: number | null; p99: number | null } | null;
+}
+interface SLOAvailability {
+  targetErrorRate: number;
+  errorRateShort: number;
+  errorRateLong: number;
+  burnRateShort: number | null;
+  burnRateLong: number | null;
+  remainingBudget: number;
+  status: 'OK' | 'WATCH' | 'CRITICAL';
+}
+interface Snapshot { generatedAt: string; counters: MetricCounters; recentEvents: RecentEvent[]; limits: { maxRecentEvents: number }; slo?: { endpoints: SLOEndpointAgg[]; availability: SLOAvailability } }
 
 export default function AdminMetricsPage() {
   const [data, setData] = useState<Snapshot | null>(null);
@@ -70,6 +86,18 @@ export default function AdminMetricsPage() {
               ))}
             </div>
           </section>
+          {data.slo && (
+            <section>
+              <h2 className="font-medium mb-2 flex items-center gap-2">Service Level Objectives <span className="text-xs text-gray-500">(Rolling 5m & 60m)</span></h2>
+              <div className="mb-4 border rounded p-4 bg-white/50 dark:bg-zinc-900/40">
+                <h3 className="text-sm font-semibold mb-2">Availability</h3>
+                <AvailabilityCard availability={data.slo.availability} />
+              </div>
+              <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {data.slo.endpoints.map(ep => <EndpointSLOCard key={ep.name} ep={ep} />)}
+              </div>
+            </section>
+          )}
           <section>
             <h2 className="font-medium mb-2">Recent Events (most recent first)</h2>
             <div className="overflow-x-auto border rounded">
@@ -97,7 +125,75 @@ export default function AdminMetricsPage() {
           </section>
         </div>
       )}
-      <p className="text-xs text-gray-500">This dashboard uses in-memory ephemeral metrics; deploy a persistent metrics backend for production SLIs.</p>
+      <p className="text-xs text-gray-500">This dashboard uses in-memory ephemeral metrics; deploy a persistent metrics backend & tracing system for production SLIs.</p>
     </div>
   );
 }
+
+function statusColor(status: string) {
+  switch (status) {
+    case 'OK': return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+    case 'WATCH': return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
+    case 'CRITICAL': return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
+    default: return 'bg-gray-200 text-gray-700 dark:bg-zinc-700 dark:text-zinc-200';
+  }
+}
+
+function formatMs(v: number | null | undefined) { if (v == null) return '—'; return `${Math.round(v)}ms`; }
+function formatRate(v: number | null | undefined) { if (v == null) return '—'; return (v*100).toFixed(2)+'%'; }
+
+const EndpointSLOCard: React.FC<{ ep: SLOEndpointAgg }> = ({ ep }) => {
+  const p95Short = formatMs(ep.short?.p95);
+  const p95Long = formatMs(ep.long?.p95);
+  const target = ep.targetP95 ? `${ep.targetP95}ms` : '—';
+  return (
+    <div className="border rounded p-4 bg-white/50 dark:bg-zinc-900/40 shadow-sm space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm font-mono">{ep.name}</h3>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusColor(ep.status)}`}>{ep.status}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 text-xs">
+        <div className="space-y-1">
+          <div className="text-gray-500">p95 (5m)</div>
+          <div className="font-mono">{p95Short}</div>
+          <div className="text-gray-500">p95 (60m)</div>
+          <div className="font-mono">{p95Long}</div>
+        </div>
+        <div className="space-y-1">
+          <div className="text-gray-500">Target</div>
+            <div className="font-mono">{target}</div>
+          <div className="text-gray-500">Samples (5m)</div>
+          <div className="font-mono">{ep.short?.count ?? 0}</div>
+          <div className="text-gray-500">Samples (60m)</div>
+          <div className="font-mono">{ep.long?.count ?? 0}</div>
+        </div>
+      </div>
+      <details className="text-xs">
+        <summary className="cursor-pointer select-none text-gray-600">More</summary>
+        <div className="mt-1 grid grid-cols-3 gap-2 font-mono">
+          <div><span className="text-gray-500">p50:</span> {formatMs(ep.long?.p50)}</div>
+            <div><span className="text-gray-500">p99:</span> {formatMs(ep.long?.p99)}</div>
+            <div><span className="text-gray-500">avg 5m:</span> {formatMs(ep.short?.avg || null)}</div>
+            <div><span className="text-gray-500">avg 60m:</span> {formatMs(ep.long?.avg || null)}</div>
+            <div><span className="text-gray-500">min:</span> {formatMs(ep.long?.min)}</div>
+            <div><span className="text-gray-500">max:</span> {formatMs(ep.long?.max)}</div>
+        </div>
+      </details>
+    </div>
+  );
+};
+
+const AvailabilityCard: React.FC<{ availability: SLOAvailability }> = ({ availability }) => {
+  const { targetErrorRate, errorRateShort, errorRateLong, burnRateShort, burnRateLong, remainingBudget, status } = availability;
+  return (
+    <div className="grid md:grid-cols-5 gap-4 items-start">
+      <div className="space-y-1 text-xs"><div className="text-gray-500">Target Err Rate</div><div className="font-mono">{formatRate(targetErrorRate)}</div></div>
+      <div className="space-y-1 text-xs"><div className="text-gray-500">Err 5m</div><div className="font-mono">{formatRate(errorRateShort)}</div></div>
+      <div className="space-y-1 text-xs"><div className="text-gray-500">Err 60m</div><div className="font-mono">{formatRate(errorRateLong)}</div></div>
+      <div className="space-y-1 text-xs"><div className="text-gray-500">Burn 5m</div><div className="font-mono">{burnRateShort == null ? '—' : burnRateShort.toFixed(2)}x</div></div>
+      <div className="space-y-1 text-xs"><div className="text-gray-500">Burn 60m</div><div className="font-mono">{burnRateLong == null ? '—' : burnRateLong.toFixed(2)}x</div></div>
+      <div className="space-y-1 text-xs"><div className="text-gray-500">Remaining Budget</div><div className="font-mono">{formatRate(remainingBudget)}</div></div>
+      <div className="space-y-1 text-xs flex flex-col items-start"><div className="text-gray-500">Status</div><span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusColor(status)}`}>{status}</span></div>
+    </div>
+  );
+};
