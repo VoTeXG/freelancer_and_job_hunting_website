@@ -1,21 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useWallet } from '@/hooks/useWallet';
 import { useProfile } from '@/hooks/useProfile';
-import ProfileEditModal from '@/components/ProfileEditModal';
-import { 
-  UserCircleIcon,
-  WalletIcon,
-  StarIcon,
-  BriefcaseIcon,
-  AcademicCapIcon,
-  GlobeAltIcon,
-  PencilIcon
-} from '@heroicons/react/24/outline';
-import { CheckBadgeIcon } from '@heroicons/react/24/solid';
+const ProfileEditModal = dynamic(
+  () => import('@/components/ProfileEditModal'),
+  { ssr: false, loading: () => <div className="p-4 text-gray-500">Loading…</div> }
+);
+import PageContainer from '@/components/PageContainer';
+import { LazyIcon } from '@/components/ui/LazyIcon';
 
 export default function ProfilePage() {
   const { wallet } = useWallet();
@@ -117,7 +113,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <PageContainer>
       {/* Profile Edit Modal */}
       <ProfileEditModal
         isOpen={isEditing}
@@ -134,16 +130,16 @@ export default function ProfilePage() {
             <CardContent className="p-6 text-center">
               <div className="relative mb-4">
                 <div className="w-24 h-24 mx-auto rounded-full bg-gray-200 flex items-center justify-center">
-                  <UserCircleIcon className="w-16 h-16 text-gray-400" />
+                  <LazyIcon name="UserCircleIcon" className="w-16 h-16 text-gray-400" />
                 </div>
-                <CheckBadgeIcon className="absolute bottom-0 right-1/2 transform translate-x-6 h-6 w-6 text-blue-600" />
+                <LazyIcon name="CheckBadgeIcon" variant="solid" className="absolute bottom-0 right-1/2 transform translate-x-6 h-6 w-6 text-blue-600" />
               </div>
               
               <h1 className="text-2xl font-bold text-gray-900 mb-1">{userData.username}</h1>
               <p className="text-blue-600 font-medium mb-2">{userData.title}</p>
               
               <div className="flex items-center justify-center space-x-1 mb-4">
-                <StarIcon className="h-5 w-5 text-yellow-400" />
+                <LazyIcon name="StarIcon" variant="solid" className="h-5 w-5 text-yellow-400" />
                 <span className="font-medium">{userData.reputation}</span>
                 <span className="text-gray-500">({userData.completedJobs} jobs)</span>
               </div>
@@ -154,7 +150,7 @@ export default function ProfilePage() {
 
               <div className="mt-4 space-y-2">
                 <Button className="w-full" onClick={() => setIsEditing(!isEditing)}>
-                  <PencilIcon className="h-4 w-4 mr-2" />
+                  <LazyIcon name="PencilIcon" className="h-4 w-4 mr-2" />
                   Edit Profile
                 </Button>
               </div>
@@ -165,7 +161,7 @@ export default function ProfilePage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
-                <WalletIcon className="h-5 w-5" />
+                <LazyIcon name="WalletIcon" className="h-5 w-5" />
                 <span>Wallet Info</span>
               </CardTitle>
             </CardHeader>
@@ -214,7 +210,7 @@ export default function ProfilePage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
-                <AcademicCapIcon className="h-5 w-5" />
+                <LazyIcon name="AcademicCapIcon" className="h-5 w-5" />
                 <span>NFT Certifications</span>
               </CardTitle>
             </CardHeader>
@@ -223,7 +219,7 @@ export default function ProfilePage() {
                 {nftCertifications.map((cert) => (
                   <div key={cert.id} className="flex items-center space-x-3 p-3 border rounded-lg">
                     <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                      <AcademicCapIcon className="h-6 w-6 text-gray-400" />
+                      <LazyIcon name="AcademicCapIcon" className="h-6 w-6 text-gray-400" />
                     </div>
                     <div>
                       <p className="font-medium text-sm">{cert.name}</p>
@@ -272,7 +268,7 @@ export default function ProfilePage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
-                <BriefcaseIcon className="h-5 w-5" />
+                <LazyIcon name="BriefcaseIcon" className="h-5 w-5" />
                 <span>Recent Work</span>
               </CardTitle>
             </CardHeader>
@@ -305,7 +301,7 @@ export default function ProfilePage() {
                       
                       {job.rating && (
                         <div className="flex items-center space-x-1">
-                          <StarIcon className="h-4 w-4 text-yellow-400" />
+                          <LazyIcon name="StarIcon" variant="solid" className="h-4 w-4 text-yellow-400" />
                           <span className="text-sm font-medium">{job.rating}</span>
                         </div>
                       )}
@@ -317,6 +313,6 @@ export default function ProfilePage() {
           </Card>
         </div>
       </div>
-    </div>
+  </PageContainer>
   );
 }

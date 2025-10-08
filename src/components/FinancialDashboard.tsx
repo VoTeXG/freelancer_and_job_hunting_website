@@ -4,14 +4,7 @@ import { useState, useEffect } from 'react';
 import { useWallet } from '@/hooks/useWallet';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import {
-  ChartBarIcon,
-  CurrencyDollarIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-  CreditCardIcon,
-  ClockIcon
-} from '@heroicons/react/24/outline';
+import { LazyIcon } from '@/components/ui/LazyIcon';
 
 interface FinancialData {
   totalEarnings: number;
@@ -30,16 +23,16 @@ interface FinancialData {
 }
 
 export default function FinancialDashboard() {
-  const { address, isConnected } = useWallet();
+  const { wallet } = useWallet();
   const [financialData, setFinancialData] = useState<FinancialData | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
 
   useEffect(() => {
-    if (isConnected && address) {
+    if (wallet.isConnected && wallet.address) {
       fetchFinancialData();
     }
-  }, [isConnected, address, timeframe]);
+  }, [wallet.isConnected, wallet.address, timeframe]);
 
   const fetchFinancialData = async () => {
     try {
@@ -117,10 +110,10 @@ export default function FinancialDashboard() {
     }
   };
 
-  if (!isConnected) {
+  if (!wallet.isConnected) {
     return (
       <div className="text-center py-12">
-        <CreditCardIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+  <LazyIcon name="CreditCardIcon" className="h-16 w-16 text-gray-400 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-gray-900 mb-2">
           Connect Your Wallet
         </h3>
@@ -179,11 +172,11 @@ export default function FinancialDashboard() {
                 </p>
               </div>
               <div className="p-3 bg-green-100 rounded-full">
-                <CurrencyDollarIcon className="h-6 w-6 text-green-600" />
+                <LazyIcon name="CurrencyDollarIcon" className="h-6 w-6 text-green-600" />
               </div>
             </div>
             <div className="flex items-center mt-4 text-sm">
-              <ArrowTrendingUpIcon className="h-4 w-4 text-green-500 mr-1" />
+              <LazyIcon name="ArrowTrendingUpIcon" className="h-4 w-4 text-green-500 mr-1" />
               <span className="text-green-600">+12.5%</span>
               <span className="text-gray-500 ml-1">vs last month</span>
             </div>
@@ -200,7 +193,7 @@ export default function FinancialDashboard() {
                 </p>
               </div>
               <div className="p-3 bg-yellow-100 rounded-full">
-                <ClockIcon className="h-6 w-6 text-yellow-600" />
+                <LazyIcon name="ClockIcon" className="h-6 w-6 text-yellow-600" />
               </div>
             </div>
             <div className="flex items-center mt-4 text-sm">
@@ -219,11 +212,11 @@ export default function FinancialDashboard() {
                 </p>
               </div>
               <div className="p-3 bg-blue-100 rounded-full">
-                <ChartBarIcon className="h-6 w-6 text-blue-600" />
+                <LazyIcon name="ChartBarIcon" className="h-6 w-6 text-blue-600" />
               </div>
             </div>
             <div className="flex items-center mt-4 text-sm">
-              <ArrowTrendingUpIcon className="h-4 w-4 text-green-500 mr-1" />
+              <LazyIcon name="ArrowTrendingUpIcon" className="h-4 w-4 text-green-500 mr-1" />
               <span className="text-green-600">+3</span>
               <span className="text-gray-500 ml-1">this month</span>
             </div>
@@ -240,11 +233,11 @@ export default function FinancialDashboard() {
                 </p>
               </div>
               <div className="p-3 bg-purple-100 rounded-full">
-                <ArrowTrendingUpIcon className="h-6 w-6 text-purple-600" />
+                <LazyIcon name="ArrowTrendingUpIcon" className="h-6 w-6 text-purple-600" />
               </div>
             </div>
             <div className="flex items-center mt-4 text-sm">
-              <ArrowTrendingDownIcon className="h-4 w-4 text-red-500 mr-1" />
+              <LazyIcon name="ArrowTrendingDownIcon" className="h-4 w-4 text-red-500 mr-1" />
               <span className="text-red-600">-5.2%</span>
               <span className="text-gray-500 ml-1">vs last month</span>
             </div>
@@ -327,8 +320,8 @@ export default function FinancialDashboard() {
               <tbody className="divide-y divide-gray-200">
                 {financialData?.paymentHistory.map((payment) => (
                   <tr key={payment.id}>
-                    <td className="py-4 text-sm text-gray-900">
-                      {new Date(payment.date).toLocaleDateString()}
+                    <td className="py-4 text-sm text-gray-900" suppressHydrationWarning>
+                      {new Date(payment.date).toISOString().slice(0,10)}
                     </td>
                     <td className="py-4 text-sm text-gray-900">{payment.jobTitle}</td>
                     <td className="py-4 text-sm font-medium text-gray-900">

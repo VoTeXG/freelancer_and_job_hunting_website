@@ -43,7 +43,8 @@ A modern, decentralized freelance platform built with Next.js, TypeScript, and W
 - **ESLint** - Code linting
 - **PostCSS** - CSS processing
 - **Git** - Version control
- - **Sentry (optional)** - Error tracking & performance tracing
+- **Sentry (optional)** - Error tracking & performance tracing
+- **Usage Events (optional)** - Lightweight analytics (console + optional PostHog) via `recordEvent` & `AnalyticsProvider`
 
 ## 🚀 Getting Started
 
@@ -71,6 +72,8 @@ A modern, decentralized freelance platform built with Next.js, TypeScript, and W
    NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID=your_project_id
    NEXT_PUBLIC_ESCROW_CONTRACT_ADDRESS=0x...
    SENTRY_DSN=your_sentry_dsn  # optional
+   NEXT_PUBLIC_POSTHOG_KEY=phc_XXXX   # optional (usage events)
+   NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com  # optional override for usage events
    ```
 
 4. **Run development server**

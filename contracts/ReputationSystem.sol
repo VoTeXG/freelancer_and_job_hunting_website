@@ -141,7 +141,8 @@ contract ReputationSystem is Ownable, ReentrancyGuard {
             msg.sender == owner() || msg.sender == escrowContract,
             "Only owner or escrow contract can verify"
         );
-        require(reviews[reviewId].id != 0, "Review does not exist");
+    // Use reviewId bounds to validate existence (supports reviewId = 0)
+    require(reviewId < nextReviewId, "Review does not exist");
         require(!reviews[reviewId].verified, "Review already verified");
 
         reviews[reviewId].verified = true;

@@ -3,15 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { 
-  EyeIcon,
-  UserIcon,
-  ClockIcon,
-  CurrencyDollarIcon,
-  StarIcon,
-  CheckIcon,
-  XMarkIcon
-} from '@heroicons/react/24/outline';
+import { LazyIcon } from '@/components/ui/LazyIcon';
 
 interface Application {
   _id: string;
@@ -194,7 +186,7 @@ export default function ClientDashboard() {
                       <span className="capitalize">{job.status}</span>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <CurrencyDollarIcon className="h-4 w-4" />
+                      <LazyIcon name="CurrencyDollarIcon" className="h-4 w-4" />
                       <span>${job.budget.amount.toLocaleString()}</span>
                     </div>
                     <div className="text-xs text-gray-500">
@@ -220,7 +212,7 @@ export default function ClientDashboard() {
                   <p className="text-gray-700 mb-4">{selectedJob.description}</p>
                   <div className="flex items-center space-x-4 text-sm text-gray-600">
                     <div className="flex items-center space-x-1">
-                      <CurrencyDollarIcon className="h-4 w-4" />
+                      <LazyIcon name="CurrencyDollarIcon" className="h-4 w-4" />
                       <span>${selectedJob.budget.amount.toLocaleString()}</span>
                     </div>
                     <span>•</span>
@@ -249,7 +241,7 @@ export default function ClientDashboard() {
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-start space-x-3">
                               <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
-                                <UserIcon className="h-6 w-6 text-gray-400" />
+                                <LazyIcon name="UserIcon" className="h-6 w-6 text-gray-400" />
                               </div>
                               <div>
                                 <h4 className="font-medium text-gray-900">
@@ -257,7 +249,7 @@ export default function ClientDashboard() {
                                 </h4>
                                 <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
                                   <div className="flex items-center space-x-1">
-                                    <StarIcon className="h-4 w-4 text-yellow-400" />
+                                    <LazyIcon name="StarIcon" className="h-4 w-4 text-yellow-400" />
                                     <span>{application.freelancerId.profile.rating || 'New'}</span>
                                   </div>
                                   <span>
@@ -281,21 +273,21 @@ export default function ClientDashboard() {
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div>
                               <div className="flex items-center space-x-2 text-sm text-gray-600">
-                                <CurrencyDollarIcon className="h-4 w-4" />
+                                <LazyIcon name="CurrencyDollarIcon" className="h-4 w-4" />
                                 <span>Proposed Rate</span>
                               </div>
                               <p className="font-medium">${application.proposedRate.toLocaleString()}</p>
                             </div>
                             <div>
                               <div className="flex items-center space-x-2 text-sm text-gray-600">
-                                <ClockIcon className="h-4 w-4" />
+                                <LazyIcon name="ClockIcon" className="h-4 w-4" />
                                 <span>Duration</span>
                               </div>
                               <p className="font-medium">{application.estimatedDuration}</p>
                             </div>
                             <div>
                               <div className="flex items-center space-x-2 text-sm text-gray-600">
-                                <UserIcon className="h-4 w-4" />
+                                <LazyIcon name="UserIcon" className="h-4 w-4" />
                                 <span>Applied</span>
                               </div>
                               <p className="font-medium">{formatDate(application.appliedAt)}</p>
@@ -335,7 +327,7 @@ export default function ClientDashboard() {
                                 rel="noopener noreferrer"
                                 className="text-blue-600 hover:text-blue-800 text-sm flex items-center space-x-1"
                               >
-                                <EyeIcon className="h-4 w-4" />
+                                <LazyIcon name="EyeIcon" className="h-4 w-4" />
                                 <span>View Portfolio</span>
                               </a>
                             </div>
@@ -350,7 +342,7 @@ export default function ClientDashboard() {
                                 onClick={() => handleApplicationAction(selectedJob._id, application._id, 'reject')}
                                 className="flex items-center space-x-1"
                               >
-                                <XMarkIcon className="h-4 w-4" />
+                                <LazyIcon name="XMarkIcon" className="h-4 w-4" />
                                 <span>Decline</span>
                               </Button>
                               <Button
@@ -358,7 +350,7 @@ export default function ClientDashboard() {
                                 onClick={() => handleApplicationAction(selectedJob._id, application._id, 'accept')}
                                 className="flex items-center space-x-1"
                               >
-                                <CheckIcon className="h-4 w-4" />
+                                <LazyIcon name="CheckIcon" className="h-4 w-4" />
                                 <span>Accept</span>
                               </Button>
                             </div>

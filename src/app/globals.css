@@ -12,15 +12,21 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
+  /* Force light theme sitewide */
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Toast animations */
+@keyframes toast-slide-in {
+  from { opacity: 0; transform: translateY(-8px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes toast-bar-shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+.animate-slide-in { animation: toast-slide-in .25s ease forwards; }
+.animate-toast-bar { animation: toast-bar-shrink linear forwards; }

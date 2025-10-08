@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { FreelancerProfile } from '@/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { StarIcon, MapPinIcon } from '@heroicons/react/24/solid';
-import { CheckBadgeIcon } from '@heroicons/react/24/outline';
+import { LazyIcon } from '@/components/ui/LazyIcon';
 
 interface FreelancerCardProps {
   freelancer: FreelancerProfile;
@@ -48,13 +47,17 @@ export default function FreelancerCard({ freelancer }: FreelancerCardProps) {
           <div className="relative">
             <Image
               src={profilePicture || '/default-avatar.png'}
-              alt={`${username}'s profile`}
+              alt={`${username}'s profile photo`}
               width={64}
               height={64}
-              className="rounded-full object-cover"
+              className="rounded-full object-cover bg-gray-100"
+              sizes="(max-width: 640px) 48px, 64px"
+              priority={false}
+              placeholder={profilePicture ? 'empty' : 'blur'}
+              blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMzIiIGZpbGw9IiNlZWUiIC8+PC9zdmc+"
             />
             {certifications.length > 0 && (
-              <CheckBadgeIcon className="absolute -bottom-1 -right-1 h-6 w-6 text-blue-600 bg-white rounded-full" />
+              <LazyIcon name="CheckBadgeIcon" variant="solid" className="absolute -bottom-1 -right-1 h-6 w-6 text-blue-600 bg-white rounded-full" />
             )}
           </div>
           
@@ -72,7 +75,7 @@ export default function FreelancerCard({ freelancer }: FreelancerCardProps) {
             {/* Rating and completed jobs */}
             <div className="flex items-center space-x-4 text-sm text-gray-500">
               <div className="flex items-center space-x-1">
-                <StarIcon className="h-4 w-4 text-yellow-400" />
+                <LazyIcon name="StarIcon" variant="solid" className="h-4 w-4 text-yellow-400" />
                 <span>{reputation.toFixed(1)}</span>
               </div>
               <span>•</span>

@@ -1,16 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Modal from './ui/Modal';
 import { Button } from './ui/Button';
-import { 
-  CurrencyDollarIcon,
-  ClockIcon,
-  DocumentTextIcon
-} from '@heroicons/react/24/outline';
+import { LazyIcon } from '@/components/ui/LazyIcon';
 
 const applicationSchema = z.object({
   coverLetter: z.string().min(50, 'Cover letter must be at least 50 characters long'),
@@ -27,6 +23,10 @@ interface JobApplicationModalProps {
   onSubmit: (data: ApplicationFormData) => Promise<void>;
   isSubmitting: boolean;
   job: any;
+  mode?: 'apply' | 'edit';
+  initialValues?: Partial<ApplicationFormData>;
+  submitLabel?: string;
+  title?: string;
 }
 
 export default function JobApplicationModal({
@@ -34,7 +34,11 @@ export default function JobApplicationModal({
   onClose,
   onSubmit,
   isSubmitting,
-  job
+  job,
+  mode = 'apply',
+  initialValues,
+  submitLabel,
+  title,
 }: JobApplicationModalProps) {
   const {
     register,
@@ -52,6 +56,20 @@ export default function JobApplicationModal({
     }
   });
 
+  // When opening for edit, prefill form with provided initial values
+  useEffect(() => {
+    if (isOpen) {
+      reset({
+        coverLetter: initialValues?.coverLetter ?? '',
+        proposedRate: initialValues?.proposedRate ?? (job?.budget.amount || 0),
+        estimatedDuration: initialValues?.estimatedDuration ?? '',
+        portfolio: initialValues?.portfolio ?? '',
+      });
+    }
+    // We intentionally depend on isOpen, job?.budget.amount, and initialValues
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, job?.budget?.amount, initialValues?.coverLetter, initialValues?.proposedRate, initialValues?.estimatedDuration, initialValues?.portfolio]);
+
   const coverLetter = watch('coverLetter');
   const proposedRate = watch('proposedRate');
 
@@ -65,19 +83,22 @@ export default function JobApplicationModal({
     onClose();
   };
 
+  const effectiveTitle = title ?? (mode === 'edit' ? 'Edit Your Application' : 'Apply for this Job');
+  const effectiveSubmit = submitLabel ?? (mode === 'edit' ? 'Save Changes' : 'Submit Application');
+
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Apply for this Job">
+    <Modal isOpen={isOpen} onClose={handleClose} title={effectiveTitle}>
       <div className="space-y-6">
         {/* Job Summary */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <h3 className="font-medium text-gray-900 mb-2">{job?.title}</h3>
           <div className="flex items-center space-x-4 text-sm text-gray-600">
             <div className="flex items-center space-x-1">
-              <CurrencyDollarIcon className="h-4 w-4" />
+              <LazyIcon name="CurrencyDollarIcon" className="h-4 w-4" />
               <span>${job?.budget.amount.toLocaleString()} {job?.budget.currency}</span>
             </div>
             <div className="flex items-center space-x-1">
-              <ClockIcon className="h-4 w-4" />
+              <LazyIcon name="ClockIcon" className="h-4 w-4" />
               <span>{job?.duration}</span>
             </div>
           </div>
@@ -178,7 +199,7 @@ export default function JobApplicationModal({
           {/* Application Tips */}
           <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
             <div className="flex">
-              <DocumentTextIcon className="h-5 w-5 text-blue-400 mt-0.5" />
+              <LazyIcon name="DocumentTextIcon" className="h-5 w-5 text-blue-400 mt-0.5" />
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-blue-800">
                   Tips for a strong application
@@ -211,7 +232,7 @@ export default function JobApplicationModal({
               disabled={isSubmitting}
               className="flex-1"
             >
-              {isSubmitting ? 'Submitting...' : 'Submit Application'}
+              {isSubmitting ? (mode === 'edit' ? 'Saving…' : 'Submitting...') : effectiveSubmit}
             </Button>
           </div>
         </form>

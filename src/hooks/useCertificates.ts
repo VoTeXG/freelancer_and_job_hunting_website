@@ -116,10 +116,10 @@ export function useFreelancerSkillLevel(freelancerAddress: string, skill: string
   });
 
   return {
-    level: skillLevel?.[0],
-    certificateCount: skillLevel?.[1],
-    totalProjectValue: skillLevel?.[2],
-    lastUpdated: skillLevel?.[3],
+  level: (skillLevel as readonly [bigint, bigint, bigint, bigint] | undefined)?.[0],
+  certificateCount: (skillLevel as readonly [bigint, bigint, bigint, bigint] | undefined)?.[1],
+  totalProjectValue: (skillLevel as readonly [bigint, bigint, bigint, bigint] | undefined)?.[2],
+  lastUpdated: (skillLevel as readonly [bigint, bigint, bigint, bigint] | undefined)?.[3],
     isError,
     isLoading
   };

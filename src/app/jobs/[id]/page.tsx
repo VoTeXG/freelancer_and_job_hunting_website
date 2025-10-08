@@ -1,34 +1,42 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { 
-  ClockIcon,
-  CurrencyDollarIcon,
-  CalendarIcon,
-  UserIcon,
-  StarIcon,
-  BriefcaseIcon,
-  PaperAirplaneIcon
-} from '@heroicons/react/24/outline';
-import JobApplicationModal from '@/components/JobApplicationModal';
+import { LazyIcon } from '@/components/ui/LazyIcon';
+import { useAuth } from '@/providers/AuthProvider';
+import { useNotifications } from '@/providers/NotificationProvider';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
+
+const JobApplicationModal = dynamic(
+  () => import('@/components/JobApplicationModal'),
+  { ssr: false, loading: () => <div className="p-4 text-gray-500">Loading…</div> }
+);
 
 export default function JobDetailPage() {
   const params = useParams();
+  const jobParam = (params as any)?.id;
+  const jobId: string | undefined = Array.isArray(jobParam) ? jobParam[0] : jobParam;
   const [job, setJob] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const { token, user } = useAuth();
+  const { addNotification } = useNotifications();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     fetchJob();
-  }, [params.id]);
+  }, [jobId]);
 
   const fetchJob = async () => {
     try {
-      const response = await fetch(`/api/jobs/${params.id}`);
+      if (!jobId) return;
+  const response = await fetch(`/api/jobs/${jobId}`);
       const data = await response.json();
       
       if (data.success) {
@@ -44,11 +52,12 @@ export default function JobDetailPage() {
   const handleApply = async (applicationData: any) => {
     setIsApplying(true);
     try {
-      const response = await fetch(`/api/jobs/${params.id}`, {
+      if (!jobId) throw new Error('Missing job id');
+    const response = await fetch(`/api/jobs/${jobId}/apply`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer mock-token`, // Replace with real token
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(applicationData),
       });
@@ -58,16 +67,81 @@ export default function JobDetailPage() {
       if (data.success) {
         setShowApplicationModal(false);
         // Show success message
-        alert('Application submitted successfully!');
+        addNotification({ type: 'job_application', title: 'Application Submitted', message: 'Your proposal was sent.', data: { jobId }, timestamp: new Date().toISOString() });
         fetchJob(); // Refresh job data
       } else {
-        alert(data.error || 'Failed to submit application');
+        addNotification({ type: 'new_message', title: 'Application Failed', message: data.error || 'Failed to submit application', data: { jobId }, timestamp: new Date().toISOString() });
       }
     } catch (error) {
       console.error('Failed to apply:', error);
-      alert('Failed to submit application');
+      addNotification({ type: 'new_message', title: 'Application Error', message: 'Failed to submit application', data: { jobId }, timestamp: new Date().toISOString() });
     } finally {
       setIsApplying(false);
+    }
+  };
+
+  const myApplication = useMemo(() => {
+    if (!user || !job?.applications) return null;
+    return job.applications.find((a: any) => a.freelancer?.id === user.id) || null;
+  }, [user, job]);
+
+  const openEditModal = () => {
+    setIsEditing(true);
+    setShowApplicationModal(true);
+  };
+
+  const handleEdit = async (updates: any) => {
+    if (!jobId || !token) return;
+    setIsApplying(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/apply`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        addNotification({ type: 'job_application', title: 'Application Updated', message: 'Your proposal was updated.', data: { jobId }, timestamp: new Date().toISOString() });
+        setShowApplicationModal(false);
+        setIsEditing(false);
+        fetchJob();
+      } else {
+        addNotification({ type: 'new_message', title: 'Update Failed', message: data.error || 'Failed to update application', data: { jobId }, timestamp: new Date().toISOString() });
+      }
+    } catch (e) {
+      console.error('Edit application failed:', e);
+      addNotification({ type: 'new_message', title: 'Update Error', message: 'Failed to update application', data: { jobId }, timestamp: new Date().toISOString() });
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!jobId || !token) return;
+    setConfirmOpen(true);
+  };
+
+  const doWithdraw = async () => {
+    if (!jobId || !token) { setConfirmOpen(false); return; }
+    setIsWithdrawing(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/apply`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        addNotification({ type: 'job_application', title: 'Application Withdrawn', message: 'Your proposal was withdrawn.', data: { jobId }, timestamp: new Date().toISOString() });
+        fetchJob();
+      } else {
+        addNotification({ type: 'new_message', title: 'Withdraw Failed', message: data.error || 'Failed to withdraw', data: { jobId }, timestamp: new Date().toISOString() });
+      }
+    } catch (e) {
+      console.error('Withdraw application failed:', e);
+      addNotification({ type: 'new_message', title: 'Withdraw Error', message: 'Failed to withdraw', data: { jobId }, timestamp: new Date().toISOString() });
+    } finally {
+      setIsWithdrawing(false);
+      setConfirmOpen(false);
     }
   };
 
@@ -112,15 +186,34 @@ export default function JobDetailPage() {
     return `${weeks}w ago`;
   };
 
+  const isOpenStatus = String(job.status || '').toUpperCase() === 'OPEN';
+  const applicantsCount = Array.isArray(job.applications) ? job.applications.length : (job.applicants?.length || 0);
+  const client = job.client || job.clientId || {};
+  const jobForModal = useMemo(() => ({
+    ...job,
+    budget: {
+      amount: job.budgetAmount,
+      currency: job.currency,
+      type: String(job.budgetType || '').toLowerCase(),
+    },
+  }), [job]);
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Application Modal */}
       <JobApplicationModal
         isOpen={showApplicationModal}
-        onClose={() => setShowApplicationModal(false)}
-        onSubmit={handleApply}
+        onClose={() => { setShowApplicationModal(false); setIsEditing(false); }}
+        onSubmit={isEditing ? handleEdit : handleApply}
         isSubmitting={isApplying}
-        job={job}
+        job={jobForModal}
+        mode={isEditing ? 'edit' : 'apply'}
+        initialValues={isEditing && myApplication ? {
+          coverLetter: myApplication.coverLetter,
+          proposedRate: myApplication.proposedRate,
+          estimatedDuration: myApplication.estimatedDuration,
+          portfolio: myApplication.portfolio || '',
+        } : undefined}
       />
 
       {/* Header */}
@@ -129,9 +222,9 @@ export default function JobDetailPage() {
         <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
           <span>Posted {timeAgo(job.createdAt)}</span>
           <span>•</span>
-          <span>{job.applicants.length} proposal{job.applicants.length !== 1 ? 's' : ''}</span>
+          <span>{applicantsCount} proposal{applicantsCount !== 1 ? 's' : ''}</span>
           <span>•</span>
-          <span className="capitalize">{job.status.replace('-', ' ')}</span>
+          <span className="capitalize">{String(job.status || '').toLowerCase().replace('-', ' ')}</span>
         </div>
       </div>
 
@@ -192,22 +285,48 @@ export default function JobDetailPage() {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Apply Button */}
-          {job.status === 'open' && (
+          {isOpenStatus && (
             <Card>
               <CardContent className="p-6">
-                <Button 
-                  className="w-full mb-4"
-                  onClick={() => setShowApplicationModal(true)}
-                >
-                  <PaperAirplaneIcon className="h-4 w-4 mr-2" />
-                  Apply Now
-                </Button>
+        {!myApplication ? (
+                  <Button 
+                    className="w-full mb-4"
+                    onClick={() => setShowApplicationModal(true)}
+                  >
+                    <LazyIcon name="PaperAirplaneIcon" className="h-4 w-4 mr-2" />
+                    Apply Now
+                  </Button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="text-sm text-gray-600">
+          You applied with ${'{'}myApplication.proposedRate{'}'} and status { '{'}myApplication.status{'}' }.
+                    </div>
+                    <div className="flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={openEditModal} disabled={isWithdrawing || myApplication.status !== 'PENDING'}>
+                        <LazyIcon name="PencilSquareIcon" className="h-4 w-4 mr-2" /> Edit
+                      </Button>
+          <Button variant="destructive" className="flex-1" onClick={handleWithdraw} disabled={isWithdrawing || myApplication.status !== 'PENDING'}>
+                        <LazyIcon name="XMarkIcon" className="h-4 w-4 mr-2" /> Withdraw
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <p className="text-sm text-gray-500 text-center">
                   Submit your proposal to get hired
                 </p>
               </CardContent>
             </Card>
           )}
+
+          <ConfirmDialog
+            isOpen={confirmOpen}
+            title="Withdraw Application"
+            message="Are you sure you want to withdraw your application? This action cannot be undone."
+            confirmText={isWithdrawing ? 'Withdrawing…' : 'Withdraw'}
+            onConfirm={doWithdraw}
+            onCancel={() => setConfirmOpen(false)}
+            confirmVariant="destructive"
+          />
 
           {/* Job Details */}
           <Card>
@@ -216,19 +335,19 @@ export default function JobDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center space-x-3">
-                <CurrencyDollarIcon className="h-5 w-5 text-gray-400" />
+                <LazyIcon name="CurrencyDollarIcon" className="h-5 w-5 text-gray-400" />
                 <div>
                   <p className="font-medium">
-                    ${job.budget.amount.toLocaleString()} {job.budget.currency}
+                    ${Number(job.budgetAmount).toLocaleString()} {job.currency}
                   </p>
                   <p className="text-sm text-gray-500">
-                    {job.budget.type === 'fixed' ? 'Fixed price' : 'Hourly rate'}
+                    {String(job.budgetType || '').toUpperCase() === 'FIXED' ? 'Fixed price' : 'Hourly rate'}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center space-x-3">
-                <ClockIcon className="h-5 w-5 text-gray-400" />
+                <LazyIcon name="ClockIcon" className="h-5 w-5 text-gray-400" />
                 <div>
                   <p className="font-medium">{job.duration}</p>
                   <p className="text-sm text-gray-500">Project duration</p>
@@ -237,7 +356,7 @@ export default function JobDetailPage() {
 
               {job.deadline && (
                 <div className="flex items-center space-x-3">
-                  <CalendarIcon className="h-5 w-5 text-gray-400" />
+                  <LazyIcon name="CalendarIcon" className="h-5 w-5 text-gray-400" />
                   <div>
                     <p className="font-medium">{formatDate(job.deadline)}</p>
                     <p className="text-sm text-gray-500">Deadline</p>
@@ -255,22 +374,22 @@ export default function JobDetailPage() {
             <CardContent>
               <div className="flex items-start space-x-3">
                 <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
-                  <UserIcon className="h-6 w-6 text-gray-400" />
+                  <LazyIcon name="UserIcon" className="h-6 w-6 text-gray-400" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-medium text-gray-900">{job.clientId.username}</h3>
-                  {job.clientId.companyName && (
-                    <p className="text-sm text-gray-600">{job.clientId.companyName}</p>
+                  <h3 className="font-medium text-gray-900">{client.username}</h3>
+                  {client.profile?.companyName && (
+                    <p className="text-sm text-gray-600">{client.profile.companyName}</p>
                   )}
                   
                   <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                     <div className="flex items-center space-x-1">
-                      <StarIcon className="h-4 w-4 text-yellow-400" />
-                      <span>{job.clientId.reputation || 'New client'}</span>
+                      <LazyIcon name="StarIcon" className="h-4 w-4 text-yellow-400" />
+                      <span>{client.profile?.rating ?? 'New client'}</span>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <BriefcaseIcon className="h-4 w-4" />
-                      <span>{job.clientId.completedJobs || 0} jobs</span>
+                      <LazyIcon name="BriefcaseIcon" className="h-4 w-4" />
+                      <span>{client.profile?.completedJobs || 0} jobs</span>
                     </div>
                   </div>
                 </div>

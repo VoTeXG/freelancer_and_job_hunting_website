@@ -10,17 +10,7 @@ import { useEscrow } from '@/hooks/useEscrow';
 import { useReputation } from '@/hooks/useReputation';
 import { useCertificates } from '@/hooks/useCertificates';
 import { getFromIPFS, getIPFSGatewayUrl } from '@/lib/ipfs';
-import {
-  ClockIcon,
-  CurrencyDollarIcon,
-  UserIcon,
-  CalendarIcon,
-  ShieldCheckIcon,
-  DocumentIcon,
-  StarIcon,
-  ChartBarIcon,
-  TrophyIcon
-} from '@heroicons/react/24/outline';
+import { LazyIcon } from '@/components/ui/LazyIcon';
 
 interface Job {
   id: string;
@@ -40,8 +30,21 @@ interface Job {
   }>;
   ipfsHash?: string;
   useBlockchain: boolean;
-  creatorAddress?: string;
-  escrowContractAddress?: string;
+  // From API job select
+  escrowDeployed?: boolean;
+  escrowPending?: boolean;
+  escrowDeploymentAttempts?: number;
+  escrowOnChainId?: number | null;
+  client?: {
+    id: string;
+    username: string;
+    walletAddress?: string | null;
+    profile?: {
+      companyName?: string | null;
+      rating?: number | null;
+      completedJobs?: number | null;
+    } | null;
+  } | null;
   status: string;
   createdAt: string;
 }
@@ -62,7 +65,7 @@ interface EscrowInfo {
 export default function JobDetailEnhanced() {
   const params = useParams();
   const { address, isConnected } = useAccount();
-  const { createEscrow } = useEscrow();
+  const { createEscrow, releaseMilestonePayment } = useEscrow();
   const { submitReview } = useReputation();
   const { mintCertificate } = useCertificates();
   
@@ -86,14 +89,12 @@ export default function JobDetailEnhanced() {
       
       // Load job from database
       const response = await fetch(`/api/jobs/${jobId}`);
-      const result = await response.json();
-      
-      if (!result.success) {
+  const result = await response.json();
+  if (!result.success) {
         throw new Error(result.error || 'Job not found');
       }
-      
-      const jobData = result.data;
-      setJob(jobData);
+  const jobData = result.job; // API returns { success, job }
+  setJob(jobData);
 
       // Load IPFS metadata if available
       if (jobData.ipfsHash) {
@@ -106,10 +107,23 @@ export default function JobDetailEnhanced() {
       }
 
       // Load blockchain data if job uses blockchain (mock for now)
-      if (jobData.useBlockchain && jobData.escrowContractAddress && isConnected) {
+      if (jobData.useBlockchain && isConnected) {
         try {
-          // Mock: const escrowData = await getEscrowInfo(jobData.escrowContractAddress);
-          const escrowData = null; // Placeholder
+          // Placeholder: reflect basic escrow flags from API until on-chain read is wired
+          const escrowData = jobData.escrowDeployed
+            ? {
+                totalAmount: BigInt(Math.max(1, Math.floor((jobData.budgetAmount || 0) * 1e18))),
+                client: jobData.client?.walletAddress || '',
+                freelancer: '',
+                milestones: (jobData.milestones || []).map((m: any) => ({
+                  description: m.description,
+                  amount: BigInt(Math.max(1, Math.floor((m.amount || 0) * 1e18))),
+                  completed: false,
+                  approved: false,
+                })),
+                isActive: true,
+              }
+            : null;
           setEscrowInfo(escrowData);
         } catch (blockchainError) {
           console.error('Failed to load blockchain data:', blockchainError);
@@ -136,6 +150,27 @@ export default function JobDetailEnhanced() {
       setError(err instanceof Error ? err.message : 'Failed to load job');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const releaseMilestone = async (milestoneIndex: number) => {
+    if (!job) return;
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/escrow`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer mock-token' },
+        body: JSON.stringify({ action: 'release', milestoneIndex }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert(data.error || 'Failed to release payment');
+        return;
+      }
+  await releaseMilestonePayment(data.escrowId, milestoneIndex);
+  alert(`Release transaction submitted for escrow #${data.escrowId}, milestone ${milestoneIndex + 1}`);
+    } catch (e) {
+      console.error('release error', e);
+      alert('Release failed');
     }
   };
 
@@ -214,16 +249,16 @@ export default function JobDetailEnhanced() {
                   <CardTitle className="text-2xl text-gray-900">{job.title}</CardTitle>
                   <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
                     <span className="flex items-center">
-                      <CalendarIcon className="h-4 w-4 mr-1" />
+                      <LazyIcon name="CalendarIcon" className="h-4 w-4 mr-1" />
                       Posted {new Date(job.createdAt).toLocaleDateString()}
                     </span>
                     <span className="flex items-center">
-                      <ClockIcon className="h-4 w-4 mr-1" />
+                      <LazyIcon name="ClockIcon" className="h-4 w-4 mr-1" />
                       {job.duration}
                     </span>
                     {job.useBlockchain && (
                       <span className="flex items-center text-green-600">
-                        <ShieldCheckIcon className="h-4 w-4 mr-1" />
+                        <LazyIcon name="ShieldCheckIcon" className="h-4 w-4 mr-1" />
                         Blockchain Protected
                       </span>
                     )}
@@ -249,7 +284,7 @@ export default function JobDetailEnhanced() {
             <Card className="border-green-200 bg-green-50">
               <CardHeader>
                 <CardTitle className="flex items-center text-green-800">
-                  <ShieldCheckIcon className="h-6 w-6 mr-2" />
+                  <LazyIcon name="ShieldCheckIcon" className="h-6 w-6 mr-2" />
                   Blockchain Escrow Details
                 </CardTitle>
               </CardHeader>
@@ -282,7 +317,7 @@ export default function JobDetailEnhanced() {
                                 {formatEther(milestone.amount)} ETH
                               </p>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right space-y-2">
                               {milestone.completed ? (
                                 <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
                                   Completed
@@ -292,6 +327,11 @@ export default function JobDetailEnhanced() {
                                   Pending
                                 </span>
                               )}
+                              <div>
+                                <Button size="sm" variant="outline" onClick={() => releaseMilestone(index)} disabled={!job?.escrowDeployed}>
+                                  Release
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -342,7 +382,7 @@ export default function JobDetailEnhanced() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
-                  <DocumentIcon className="h-6 w-6 mr-2" />
+                  <LazyIcon name="DocumentIcon" className="h-6 w-6 mr-2" />
                   Project Attachments
                 </CardTitle>
               </CardHeader>
@@ -356,7 +396,7 @@ export default function JobDetailEnhanced() {
                       rel="noopener noreferrer"
                       className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                     >
-                      <DocumentIcon className="h-5 w-5 text-gray-400" />
+                      <LazyIcon name="DocumentIcon" className="h-5 w-5 text-gray-400" />
                       <div>
                         <p className="font-medium text-gray-900">{attachment.name}</p>
                         <p className="text-sm text-gray-600">{attachment.type}</p>
@@ -427,17 +467,22 @@ export default function JobDetailEnhanced() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
-                <UserIcon className="h-6 w-6 mr-2" />
+                <LazyIcon name="UserIcon" className="h-6 w-6 mr-2" />
                 Client Information
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {job.creatorAddress && (
+              {(job.client?.username || job.client?.walletAddress) && (
                 <div>
-                  <p className="text-sm font-medium text-gray-700">Wallet Address</p>
-                  <p className="text-sm text-gray-600 font-mono">
-                    {job.creatorAddress.slice(0, 6)}...{job.creatorAddress.slice(-4)}
-                  </p>
+                  <p className="text-sm font-medium text-gray-700">Client</p>
+                  {job.client?.username && (
+                    <p className="text-sm text-gray-800">{job.client.username}</p>
+                  )}
+                  {job.client?.walletAddress && (
+                    <p className="text-sm text-gray-600 font-mono">
+                      {job.client.walletAddress.slice(0, 6)}...{job.client.walletAddress.slice(-4)}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -447,7 +492,8 @@ export default function JobDetailEnhanced() {
                   <div className="flex items-center space-x-2">
                     <div className="flex items-center">
                       {[...Array(5)].map((_, i) => (
-                        <StarIcon
+                        <LazyIcon
+                          name="StarIcon"
                           key={i}
                           className={`h-4 w-4 ${
                             i < Math.floor(clientReputation.averageRating)
@@ -463,7 +509,7 @@ export default function JobDetailEnhanced() {
                   </div>
                   <div className="mt-2">
                     <div className="flex items-center space-x-2 text-sm">
-                      <ChartBarIcon className="h-4 w-4 text-blue-500" />
+                      <LazyIcon name="ChartBarIcon" className="h-4 w-4 text-blue-500" />
                       <span>Reputation Score: {clientReputation.reputationScore}</span>
                     </div>
                   </div>
@@ -476,7 +522,7 @@ export default function JobDetailEnhanced() {
                   <div className="space-y-2">
                     {clientCertificates.slice(0, 3).map((cert, index) => (
                       <div key={index} className="flex items-center space-x-2 text-sm">
-                        <TrophyIcon className="h-4 w-4 text-gold-500" />
+                        <LazyIcon name="TrophyIcon" className="h-4 w-4 text-gold-500" />
                         <span className="text-gray-600">
                           {cert.skillLevel} Level Certificate
                         </span>

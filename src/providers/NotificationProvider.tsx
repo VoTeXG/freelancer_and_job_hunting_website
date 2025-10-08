@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useMemo } from 'react';
+import { useToast } from '@/providers/ToastProvider';
 import { useAccount } from 'wagmi';
 import { io, Socket } from 'socket.io-client';
 
@@ -22,14 +23,18 @@ interface NotificationContextType {
   markAllAsRead: () => void;
   clearNotifications: () => void;
   socket: Socket | null;
+  filterTypes: string[];
+  setFilterTypes: (types: string[]) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const { address, isConnected } = useAccount();
+  const { push } = useToast();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [filterTypes, setFilterTypes] = useState<string[]>([]); // empty => no filter
 
   useEffect(() => {
     if (isConnected && address) {
@@ -51,15 +56,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           ...notificationData,
           read: false,
         };
-        
         setNotifications(prev => [notification, ...prev]);
-        
-        // Show browser notification if permission granted
+        // Mirror as toast
+        push({
+          title: notification.title,
+          message: notification.message,
+          variant: mapTypeToVariant(notification.type),
+          duration: 5000
+        });
         if (Notification.permission === 'granted') {
-          new Notification(notification.title, {
-            body: notification.message,
-            icon: '/favicon.ico',
-          });
+          new Notification(notification.title, { body: notification.message, icon: '/favicon.ico' });
         }
       });
 
@@ -79,44 +85,47 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const addNotification = (notificationData: Omit<Notification, 'id' | 'read'>) => {
+  const addNotification = useCallback((notificationData: Omit<Notification, 'id' | 'read'>) => {
     const notification: Notification = {
       id: `notification_${Date.now()}_${Math.random()}`,
       ...notificationData,
       read: false,
     };
-    setNotifications(prev => [notification, ...prev]);
-  };
+    setNotifications(prev => {
+      const next = [notification, ...prev];
+      // Cap to last 500 notifications to prevent unbounded memory growth
+      if (next.length > 500) return next.slice(0, 500);
+      return next;
+    });
+    push({ title: notification.title, message: notification.message, variant: mapTypeToVariant(notification.type), duration: 4500 });
+  }, [push]);
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === id ? { ...notification, read: true } : notification
-      )
-    );
-  };
+  const markAsRead = useCallback((id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? (n.read ? n : { ...n, read: true }) : n));
+  }, []);
 
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, read: true }))
-    );
-  };
+  const markAllAsRead = useCallback(() => {
+    setNotifications(prev => prev.map(n => n.read ? n : { ...n, read: true }));
+  }, []);
 
-  const clearNotifications = () => {
-    setNotifications([]);
-  };
+  const clearNotifications = useCallback(() => { setNotifications([]); }, []);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = useMemo(() => notifications.reduce((c,n)=>c + (n.read ? 0 : 1), 0), [notifications]);
+
+  // Derived filtered notifications
+  const effectiveNotifications = useMemo(() => filterTypes.length ? notifications.filter(n => filterTypes.includes(n.type)) : notifications, [notifications, filterTypes]);
 
   return (
     <NotificationContext.Provider value={{
-      notifications,
+      notifications: effectiveNotifications,
       unreadCount,
       addNotification,
       markAsRead,
       markAllAsRead,
       clearNotifications,
       socket,
+      filterTypes,
+      setFilterTypes,
     }}>
       {children}
     </NotificationContext.Provider>
@@ -129,4 +138,15 @@ export function useNotifications() {
     throw new Error('useNotifications must be used within a NotificationProvider');
   }
   return context;
+}
+
+function mapTypeToVariant(type: Notification['type']): 'success' | 'error' | 'info' | 'warning' {
+  switch (type) {
+    case 'job_application': return 'info';
+    case 'milestone_completed': return 'success';
+    case 'payment_released': return 'success';
+    case 'dispute_raised': return 'warning';
+    case 'new_message': return 'info';
+    default: return 'info';
+  }
 }

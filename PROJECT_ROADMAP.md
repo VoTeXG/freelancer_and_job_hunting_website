@@ -298,7 +298,7 @@ Phase 5 will be declared COMPLETE when all of the following are true:
 - [x] Error tracking (Sentry) backend + frontend (initial integration, DSN optional)
 - [x] Server-Timing enrichment (jobs endpoint DB timings)
 - [x] Admin health endpoint (`/api/admin/health`) with DB + migration count
-- [ ] Usage funnels / events (PostHog or lightweight custom logger wrapper)
+- [x] Usage funnels / events (framework + initial events: jobs.list, jobs.list.error, escrow.action)
 - [ ] Latency & error budget dashboard (basic thresholds)
 - [ ] Add cache timing segments once caching layer introduced
 

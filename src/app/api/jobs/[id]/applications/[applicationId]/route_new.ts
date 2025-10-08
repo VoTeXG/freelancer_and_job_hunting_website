@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { verifyAccessToken } from '@/lib/auth';
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string; applicationId: string } }
+  { params }: { params: Promise<{ id: string; applicationId: string }> }
 ) {
   try {
+    const p = await params;
     const { action } = await request.json();
     const authHeader = request.headers.get('authorization');
     
@@ -20,13 +21,17 @@ export async function PATCH(
     const token = authHeader.split(' ')[1];
     
     try {
-      const decoded = verifyToken(token) as any;
-      const clientId = decoded.userId;
+      const access = verifyAccessToken(token);
+      if (!access) return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 });
+      if (!access.scope?.includes('write:applications')) {
+        return NextResponse.json({ success: false, error: 'Forbidden: missing scope write:applications' }, { status: 403 });
+      }
+      const clientId = access.sub;
 
       // Find the job and verify ownership
-      const job = await prisma.job.findFirst({
+    const job = await prisma.job.findFirst({
         where: {
-          id: params.id,
+      id: p.id,
           clientId: clientId,
         },
       });
@@ -48,10 +53,10 @@ export async function PATCH(
 
       // Find and update the application
       const application = await prisma.application.findUnique({
-        where: { id: params.applicationId },
+        where: { id: p.applicationId },
       });
 
-      if (!application || application.jobId !== params.id) {
+      if (!application || application.jobId !== p.id) {
         return NextResponse.json(
           { success: false, error: 'Application not found' },
           { status: 404 }
@@ -62,7 +67,7 @@ export async function PATCH(
       const newStatus = action === 'accept' ? 'ACCEPTED' : 'REJECTED';
       
       await prisma.application.update({
-        where: { id: params.applicationId },
+        where: { id: p.applicationId },
         data: { status: newStatus },
       });
 
@@ -71,8 +76,8 @@ export async function PATCH(
         // Reject other pending applications
         await prisma.application.updateMany({
           where: {
-            jobId: params.id,
-            id: { not: params.applicationId },
+            jobId: p.id,
+            id: { not: p.applicationId },
             status: 'PENDING',
           },
           data: { status: 'REJECTED' },
@@ -80,7 +85,7 @@ export async function PATCH(
         
         // Update job status to in progress
         await prisma.job.update({
-          where: { id: params.id },
+          where: { id: p.id },
           data: { status: 'IN_PROGRESS' },
         });
       }

@@ -104,8 +104,8 @@ export function useUserReviewsPaginated(userAddress: string, offset: number, lim
   });
 
   return {
-    reviewIds: data?.[0],
-    total: data?.[1],
+  reviewIds: (data as readonly [readonly bigint[], bigint] | undefined)?.[0],
+  total: (data as readonly [readonly bigint[], bigint] | undefined)?.[1],
     isError,
     isLoading
   };

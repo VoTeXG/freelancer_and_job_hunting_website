@@ -3,13 +3,10 @@
 import { useState } from 'react';
 import { uploadToIPFS, uploadJSONToIPFS, getIPFSGatewayUrl } from '@/lib/ipfs';
 import { Button } from '@/components/ui/Button';
+import PageContainer from '@/components/PageContainer';
+import SectionHeader from '@/components/SectionHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import {
-  CloudArrowUpIcon,
-  DocumentIcon,
-  EyeIcon,
-  XMarkIcon
-} from '@heroicons/react/24/outline';
+import { LazyIcon } from '@/components/ui/LazyIcon';
 
 interface UploadedFile {
   name: string;
@@ -94,11 +91,8 @@ export default function IPFSFileManager() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">IPFS File Manager</h1>
-        <p className="text-gray-600 mt-2">Upload and manage files on the decentralized web</p>
-      </div>
+    <PageContainer className="max-w-4xl">
+      <SectionHeader title="IPFS File Manager" subtitle="Upload and manage files on the decentralized web" />
 
       <div className="space-y-6">
         {/* File Upload */}
@@ -122,7 +116,7 @@ export default function IPFSFileManager() {
                   uploading ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
-                <CloudArrowUpIcon className="h-12 w-12 text-gray-400 mb-4" />
+                <LazyIcon name="CloudArrowUpIcon" className="h-12 w-12 text-gray-400 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">
                   {uploading ? 'Uploading...' : 'Upload Files'}
                 </h3>
@@ -137,8 +131,8 @@ export default function IPFSFileManager() {
             
             {uploading && (
               <div className="mt-4 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                <span className="ml-2 text-blue-600">Uploading to IPFS...</span>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+                <span className="ml-2 text-purple-600">Uploading to IPFS...</span>
               </div>
             )}
           </CardContent>
@@ -156,7 +150,7 @@ export default function IPFSFileManager() {
                 onChange={(e) => setJsonData(e.target.value)}
                 placeholder="Enter JSON data here..."
                 rows={6}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               />
               <Button
                 onClick={handleJsonUpload}
@@ -188,7 +182,7 @@ export default function IPFSFileManager() {
                   <div key={index} className="border border-gray-200 rounded-lg p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        <DocumentIcon className="h-8 w-8 text-gray-400" />
+                        <LazyIcon name="DocumentIcon" className="h-8 w-8 text-gray-400" />
                         <div>
                           <h4 className="font-medium text-gray-900">{file.name}</h4>
                           <div className="text-sm text-gray-600 space-x-2">
@@ -211,16 +205,16 @@ export default function IPFSFileManager() {
                           href={getIPFSGatewayUrl(file.ipfsHash)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                         >
-                          <EyeIcon className="h-5 w-5" />
+                          <LazyIcon name="EyeIcon" className="h-5 w-5" />
                         </a>
                         
                         <button
                           onClick={() => removeFile(index)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         >
-                          <XMarkIcon className="h-5 w-5" />
+                          <LazyIcon name="XMarkIcon" className="h-5 w-5" />
                         </button>
                       </div>
                     </div>
@@ -229,7 +223,7 @@ export default function IPFSFileManager() {
               </div>
             ) : (
               <div className="text-center py-8">
-                <DocumentIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <LazyIcon name="DocumentIcon" className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600">No files uploaded yet</p>
                 <p className="text-sm text-gray-500 mt-1">
                   Upload files to see them listed here with their IPFS hashes
@@ -240,11 +234,11 @@ export default function IPFSFileManager() {
         </Card>
 
         {/* IPFS Information */}
-        <Card className="bg-blue-50 border-blue-200">
+        <Card className="bg-purple-50 border-purple-200">
           <CardHeader>
-            <CardTitle className="text-blue-800">About IPFS</CardTitle>
+            <CardTitle className="text-purple-800">About IPFS</CardTitle>
           </CardHeader>
-          <CardContent className="text-blue-700">
+          <CardContent className="text-purple-700">
             <div className="space-y-2 text-sm">
               <p>
                 <strong>IPFS (InterPlanetary File System)</strong> is a distributed, peer-to-peer 
@@ -267,6 +261,6 @@ export default function IPFSFileManager() {
           </CardContent>
         </Card>
       </div>
-    </div>
+  </PageContainer>
   );
 }

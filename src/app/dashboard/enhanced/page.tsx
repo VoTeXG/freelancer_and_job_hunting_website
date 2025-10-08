@@ -2,25 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { formatEther } from 'viem';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import PageContainer from '@/components/PageContainer';
 import { useEscrow } from '@/hooks/useEscrow';
+import { useAuth } from '@/providers/AuthProvider';
+import { useNotifications } from '@/providers/NotificationProvider';
 import { useReputation } from '@/hooks/useReputation';
 import { useCertificates } from '@/hooks/useCertificates';
-import {
-  BriefcaseIcon,
-  CurrencyDollarIcon,
-  UserGroupIcon,
-  ChartBarIcon,
-  TrophyIcon,
-  ShieldCheckIcon,
-  ClockIcon,
-  StarIcon,
-  PlusIcon,
-  EyeIcon
-} from '@heroicons/react/24/outline';
+// Dynamic icon loading to reduce initial JS bundle
+import { LazyIcon } from '@/components/ui/LazyIcon';
 
 interface DashboardStats {
   totalJobs: number;
@@ -35,7 +29,10 @@ interface DashboardStats {
 
 export default function DashboardEnhanced() {
   const { address, isConnected } = useAccount();
+  const { openConnectModal } = useConnectModal();
   const { createEscrow } = useEscrow();
+  const { token } = useAuth();
+  const { addNotification } = useNotifications();
   const { submitReview } = useReputation();
   const { mintCertificate } = useCertificates();
   
@@ -51,6 +48,8 @@ export default function DashboardEnhanced() {
   });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'escrows' | 'reputation' | 'certificates'>('overview');
+  const [pendingEscrows, setPendingEscrows] = useState<any[]>([]);
+  const [retryingIds, setRetryingIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (isConnected && address) {
@@ -65,13 +64,11 @@ export default function DashboardEnhanced() {
       setLoading(true);
       
       // Load traditional data from database
+      const headers: Record<string,string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       const [jobsResponse, applicationsResponse] = await Promise.all([
-        fetch('/api/jobs', {
-          headers: { 'Authorization': 'Bearer mock-token' }
-        }),
-        fetch('/api/applications', {
-          headers: { 'Authorization': 'Bearer mock-token' }
-        })
+        fetch('/api/jobs?clientOnly=true', { headers }),
+        fetch('/api/applications', { headers })
       ]);
 
       const jobsResult = await jobsResponse.json();
@@ -85,7 +82,7 @@ export default function DashboardEnhanced() {
       ]);
 
       // Calculate stats
-      const totalJobs = jobsResult.success ? jobsResult.data.length : 0;
+  const totalJobs = jobsResult.success ? (jobsResult.jobs?.length || 0) : 0;
       const activeEscrows = escrows.filter((escrow: any) => escrow.isActive).length;
       const completedProjects = certificates.length;
       const totalEarnings = escrows.reduce((sum: number, escrow: any) => {
@@ -99,9 +96,14 @@ export default function DashboardEnhanced() {
         completedProjects,
         reputation,
         certificates,
-        recentJobs: jobsResult.success ? jobsResult.data.slice(0, 5) : [],
+  recentJobs: jobsResult.success ? (jobsResult.jobs || []).slice(0, 5) : [],
         recentEscrows: escrows.slice(0, 5)
       });
+      // Derive pending escrow jobs (placeholder heuristic: jobs with status OPEN and zero activeEscrows)
+      if (jobsResult.success) {
+        const pending = (jobsResult.jobs || []).filter((j: any) => j.useBlockchain && !j.escrowDeployed);
+        setPendingEscrows(pending.slice(0,10));
+      }
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     } finally {
@@ -109,26 +111,61 @@ export default function DashboardEnhanced() {
     }
   };
 
+  const retryEscrow = async (jobId: string) => {
+    if (!token) return;
+    setRetryingIds(prev => [...prev, jobId]);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/escrow`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ action: 'retry' })
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Retry failed');
+      addNotification({
+        type: 'new_message',
+        title: 'Escrow Retry Scheduled',
+        message: 'Escrow marked pending again for deployment',
+        data: { jobId },
+        timestamp: new Date().toISOString()
+      });
+      // Refresh list
+      await loadDashboardData();
+    } catch (e: any) {
+      addNotification({
+        type: 'new_message',
+        title: 'Escrow Retry Error',
+        message: e.message || 'Unknown error',
+        data: { jobId },
+        timestamp: new Date().toISOString()
+      });
+    } finally {
+      setRetryingIds(prev => prev.filter(id => id !== jobId));
+    }
+  };
+
   if (!isConnected) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageContainer>
         <Card className="text-center py-12">
           <CardContent>
-            <ShieldCheckIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <LazyIcon name="ShieldCheckIcon" className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Connect Your Wallet</h2>
             <p className="text-gray-600 mb-6">
               Connect your wallet to access your blockchain-powered freelancer dashboard
             </p>
-            <Button>Connect Wallet</Button>
+            <Button onClick={() => openConnectModal?.()}>
+              Connect Wallet
+            </Button>
           </CardContent>
         </Card>
-      </div>
+      </PageContainer>
     );
   }
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <PageContainer>
         <div className="animate-pulse space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {[...Array(4)].map((_, i) => (
@@ -137,12 +174,12 @@ export default function DashboardEnhanced() {
           </div>
           <div className="h-64 bg-gray-200 rounded-lg"></div>
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <PageContainer>
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
@@ -165,7 +202,7 @@ export default function DashboardEnhanced() {
                 <p className="text-sm font-medium text-gray-600">Total Jobs</p>
                 <p className="text-3xl font-bold text-gray-900">{stats.totalJobs}</p>
               </div>
-              <BriefcaseIcon className="h-8 w-8 text-blue-500" />
+              <LazyIcon name="BriefcaseIcon" className="h-8 w-8 text-blue-500" />
             </div>
           </CardContent>
         </Card>
@@ -177,7 +214,7 @@ export default function DashboardEnhanced() {
                 <p className="text-sm font-medium text-gray-600">Active Escrows</p>
                 <p className="text-3xl font-bold text-green-600">{stats.activeEscrows}</p>
               </div>
-              <ShieldCheckIcon className="h-8 w-8 text-green-500" />
+              <LazyIcon name="ShieldCheckIcon" className="h-8 w-8 text-green-500" />
             </div>
           </CardContent>
         </Card>
@@ -191,7 +228,7 @@ export default function DashboardEnhanced() {
                   {stats.totalEarnings.toFixed(3)} ETH
                 </p>
               </div>
-              <CurrencyDollarIcon className="h-8 w-8 text-purple-500" />
+              <LazyIcon name="CurrencyDollarIcon" className="h-8 w-8 text-purple-500" />
             </div>
           </CardContent>
         </Card>
@@ -203,29 +240,53 @@ export default function DashboardEnhanced() {
                 <p className="text-sm font-medium text-gray-600">Certificates</p>
                 <p className="text-3xl font-bold text-orange-600">{stats.certificates.length}</p>
               </div>
-              <TrophyIcon className="h-8 w-8 text-orange-500" />
+              <LazyIcon name="TrophyIcon" className="h-8 w-8 text-orange-500" />
             </div>
           </CardContent>
         </Card>
       </div>
 
+      {activeTab === 'overview' && pendingEscrows.length > 0 && (
+        <Card className="mb-8 border-amber-300 bg-amber-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-800">
+              <LazyIcon name="ShieldCheckIcon" className="h-5 w-5" /> Pending Escrow Deployments
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {pendingEscrows.map((job: any) => (
+              <div key={job.id} className="flex items-center justify-between text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium text-amber-900 truncate">{job.title}</p>
+                  <p className="text-amber-700 text-xs">Created {new Date(job.createdAt).toLocaleDateString()} • Attempts: {job.escrowDeploymentAttempts}</p>
+                </div>
+                <Button size="sm" variant="outline" className="border-amber-300 text-amber-800 hover:bg-amber-100" disabled={retryingIds.includes(job.id)} onClick={() => retryEscrow(job.id)}>
+                  {retryingIds.includes(job.id) ? 'Retrying...' : 'Retry'}
+                </Button>
+              </div>
+            ))}
+            <p className="text-xs text-amber-600">Escrow flagged pending will be retried by backend process (future).</p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Navigation Tabs */}
       <div className="border-b border-gray-200 mb-6">
         <nav className="-mb-px flex space-x-8">
-          {[
-            { id: 'overview', name: 'Overview', icon: ChartBarIcon },
-            { id: 'escrows', name: 'Active Escrows', icon: ShieldCheckIcon },
-            { id: 'reputation', name: 'Reputation', icon: StarIcon },
-            { id: 'certificates', name: 'Certificates', icon: TrophyIcon }
+          {[ 
+            { id: 'overview', name: 'Overview', icon: (p:any) => <LazyIcon name="ChartBarIcon" {...p} /> },
+            { id: 'escrows', name: 'Active Escrows', icon: (p:any) => <LazyIcon name="ShieldCheckIcon" {...p} /> },
+            { id: 'reputation', name: 'Reputation', icon: (p:any) => <LazyIcon name="StarIcon" {...p} /> },
+            { id: 'certificates', name: 'Certificates', icon: (p:any) => <LazyIcon name="TrophyIcon" {...p} /> }
           ].map((tab) => {
-            const Icon = tab.icon;
+            const Icon:any = tab.icon as any;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm ${
+                className={`flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
+                    ? 'border-purple-600 text-purple-700'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
@@ -247,7 +308,7 @@ export default function DashboardEnhanced() {
                 <CardTitle>Recent Jobs</CardTitle>
                 <Link href="/jobs/create-enhanced">
                   <Button size="sm">
-                    <PlusIcon className="h-4 w-4 mr-1" />
+                    <LazyIcon name="PlusIcon" className="h-4 w-4 mr-1" />
                     New Job
                   </Button>
                 </Link>
@@ -274,7 +335,7 @@ export default function DashboardEnhanced() {
                             </span>
                             {job.useBlockchain && (
                               <span className="flex items-center text-xs text-green-600">
-                                <ShieldCheckIcon className="h-3 w-3 mr-1" />
+                                <LazyIcon name="ShieldCheckIcon" className="h-3 w-3 mr-1" />
                                 Blockchain
                               </span>
                             )}
@@ -282,7 +343,7 @@ export default function DashboardEnhanced() {
                         </div>
                         <Link href={`/jobs/${job.id}/enhanced`}>
                           <Button variant="outline" size="sm">
-                            <EyeIcon className="h-4 w-4" />
+                            <LazyIcon name="EyeIcon" className="h-4 w-4" />
                           </Button>
                         </Link>
                       </div>
@@ -291,7 +352,7 @@ export default function DashboardEnhanced() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <BriefcaseIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <LazyIcon name="BriefcaseIcon" className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600">No jobs posted yet</p>
                   <Link href="/jobs/create-enhanced">
                     <Button className="mt-4">Create Your First Job</Button>
@@ -331,7 +392,7 @@ export default function DashboardEnhanced() {
                           </div>
                         </div>
                         <Button variant="outline" size="sm">
-                          <EyeIcon className="h-4 w-4" />
+                          <LazyIcon name="EyeIcon" className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -339,7 +400,7 @@ export default function DashboardEnhanced() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <ShieldCheckIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <LazyIcon name="ShieldCheckIcon" className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600">No active escrows</p>
                 </div>
               )}
@@ -399,7 +460,7 @@ export default function DashboardEnhanced() {
               </div>
             ) : (
               <div className="text-center py-12">
-                <ShieldCheckIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <LazyIcon name="ShieldCheckIcon" className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Escrows</h3>
                 <p className="text-gray-600">
                   Create blockchain-protected jobs to start using escrow contracts
@@ -422,11 +483,12 @@ export default function DashboardEnhanced() {
                   <div className="text-center">
                     <div className="flex items-center justify-center space-x-1 mb-2">
                       {[...Array(5)].map((_, i) => (
-                        <StarIcon
+                        <LazyIcon
                           key={i}
+                          name="StarIcon"
                           className={`h-6 w-6 ${
                             i < Math.floor(stats.reputation.averageRating)
-                              ? 'text-yellow-400 fill-current'
+                              ? 'text-yellow-400'
                               : 'text-gray-300'
                           }`}
                         />
@@ -455,7 +517,7 @@ export default function DashboardEnhanced() {
               </div>
             ) : (
               <div className="text-center py-12">
-                <StarIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <LazyIcon name="StarIcon" className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No Reputation Data</h3>
                 <p className="text-gray-600">
                   Complete projects to start building your on-chain reputation
@@ -477,7 +539,7 @@ export default function DashboardEnhanced() {
                 {stats.certificates.map((certificate: any, index: number) => (
                   <div key={index} className="border border-orange-200 bg-orange-50 rounded-lg p-6">
                     <div className="text-center">
-                      <TrophyIcon className="h-12 w-12 text-orange-600 mx-auto mb-4" />
+                      <LazyIcon name="TrophyIcon" className="h-12 w-12 text-orange-600 mx-auto mb-4" />
                       <h3 className="font-medium text-orange-900 mb-2">
                         Certificate #{certificate.tokenId}
                       </h3>
@@ -494,7 +556,7 @@ export default function DashboardEnhanced() {
               </div>
             ) : (
               <div className="text-center py-12">
-                <TrophyIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <LazyIcon name="TrophyIcon" className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No Certificates Yet</h3>
                 <p className="text-gray-600">
                   Complete blockchain-protected projects to earn NFT certificates
@@ -514,27 +576,27 @@ export default function DashboardEnhanced() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Link href="/jobs/create-enhanced">
               <Button className="w-full" variant="outline">
-                <PlusIcon className="h-5 w-5 mr-2" />
+                <LazyIcon name="PlusIcon" className="h-5 w-5 mr-2" />
                 Create New Job
               </Button>
             </Link>
             
             <Link href="/blockchain-test">
               <Button className="w-full" variant="outline">
-                <ShieldCheckIcon className="h-5 w-5 mr-2" />
+                <LazyIcon name="ShieldCheckIcon" className="h-5 w-5 mr-2" />
                 Test Blockchain Features
               </Button>
             </Link>
             
             <Link href="/profile">
               <Button className="w-full" variant="outline">
-                <UserGroupIcon className="h-5 w-5 mr-2" />
+                <LazyIcon name="UserGroupIcon" className="h-5 w-5 mr-2" />
                 Edit Profile
               </Button>
             </Link>
           </div>
         </CardContent>
       </Card>
-    </div>
+  </PageContainer>
   );
 }

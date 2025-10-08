@@ -3,13 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import {
-  CurrencyDollarIcon,
-  CreditCardIcon,
-  ArrowsRightLeftIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon
-} from '@heroicons/react/24/outline';
+import { LazyIcon } from '@/components/ui/LazyIcon';
 
 interface Token {
   symbol: string;
@@ -309,7 +303,7 @@ export default function MultiTokenPayments() {
                   </div>
                 ) : (
                   <div className="flex items-center justify-center">
-                    <ArrowsRightLeftIcon className="h-4 w-4 mr-2" />
+                    <LazyIcon name="ArrowsRightLeftIcon" className="h-4 w-4 mr-2" />
                     Send {selectedToken}
                   </div>
                 )}
@@ -363,7 +357,7 @@ export default function MultiTokenPayments() {
                   <div className={`p-2 rounded-full ${
                     tx.type === 'sent' ? 'bg-red-100' : 'bg-green-100'
                   }`}>
-                    <ArrowsRightLeftIcon className={`h-4 w-4 ${
+                    <LazyIcon name="ArrowsRightLeftIcon" className={`h-4 w-4 ${
                       tx.type === 'sent' ? 'text-red-600' : 'text-green-600'
                     }`} />
                   </div>
@@ -384,9 +378,9 @@ export default function MultiTokenPayments() {
                       : 'bg-yellow-100 text-yellow-800'
                   }`}>
                     {tx.status === 'completed' ? (
-                      <CheckCircleIcon className="h-3 w-3 mr-1" />
+                      <LazyIcon name="CheckCircleIcon" className="h-3 w-3 mr-1" />
                     ) : (
-                      <ExclamationTriangleIcon className="h-3 w-3 mr-1" />
+                      <LazyIcon name="ExclamationTriangleIcon" className="h-3 w-3 mr-1" />
                     )}
                     {tx.status}
                   </span>

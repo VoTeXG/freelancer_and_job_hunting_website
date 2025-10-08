@@ -1,12 +1,8 @@
-import { createHelia } from 'helia';
-import { unixfs } from '@helia/unixfs';
-import { json } from '@helia/json';
-import { CID } from 'multiformats/cid';
-
 let heliaInstance: any = null;
 
 export async function getHelia() {
   if (!heliaInstance) {
+    const { createHelia } = await import('helia');
     heliaInstance = await createHelia();
   }
   return heliaInstance;
@@ -15,7 +11,8 @@ export async function getHelia() {
 export async function uploadToIPFS(file: File): Promise<string> {
   try {
     const helia = await getHelia();
-    const fs = unixfs(helia);
+  const { unixfs } = await import('@helia/unixfs');
+  const fs = unixfs(helia);
     
     const arrayBuffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
@@ -34,7 +31,8 @@ export async function uploadToIPFS(file: File): Promise<string> {
 export async function uploadJSONToIPFS(data: any): Promise<string> {
   try {
     const helia = await getHelia();
-    const j = json(helia);
+  const { json } = await import('@helia/json');
+  const j = json(helia);
     
     const cid = await j.add(data);
     return cid.toString();
@@ -47,9 +45,11 @@ export async function uploadJSONToIPFS(data: any): Promise<string> {
 export async function getFromIPFS(cidString: string): Promise<any> {
   try {
     const helia = await getHelia();
-    const j = json(helia);
+  const { json } = await import('@helia/json');
+  const j = json(helia);
     
-    const cid = CID.parse(cidString);
+  const { CID } = await import('multiformats/cid');
+  const cid = CID.parse(cidString);
     const data = await j.get(cid);
     return data;
   } catch (error) {
@@ -61,9 +61,11 @@ export async function getFromIPFS(cidString: string): Promise<any> {
 export async function getFileFromIPFS(cidString: string): Promise<Uint8Array> {
   try {
     const helia = await getHelia();
-    const fs = unixfs(helia);
+  const { unixfs } = await import('@helia/unixfs');
+  const fs = unixfs(helia);
     
-    const cid = CID.parse(cidString);
+  const { CID } = await import('multiformats/cid');
+  const cid = CID.parse(cidString);
     const chunks: Uint8Array[] = [];
     for await (const chunk of fs.cat(cid)) {
       chunks.push(chunk);

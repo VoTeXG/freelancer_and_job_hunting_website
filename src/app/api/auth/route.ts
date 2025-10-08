@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { generateToken, hashPassword, verifyPassword } from '@/lib/auth';
+import { generateToken, hashPassword, verifyPassword, verifyWalletSignature } from '@/lib/auth';
+import { verifyCsrf } from '@/lib/security';
 
 export async function POST(request: NextRequest) {
   try {
+    const csrf = verifyCsrf(request);
+    if (!csrf.ok) {
+      return NextResponse.json({ success: false, error: csrf.reason || 'CSRF failed' }, { status: 403 });
+    }
     const body = await request.json();
     const { type, ...data } = body;
 
@@ -73,7 +78,7 @@ export async function POST(request: NextRequest) {
       });
 
     } else if (type === 'signin') {
-      const { username, password, walletAddress, signature } = data;
+      const { username, password, walletAddress, signature, message } = data;
 
       // Find user
       const user = await prisma.user.findFirst({
@@ -102,9 +107,31 @@ export async function POST(request: NextRequest) {
       if (password && user.password) {
         isValid = await verifyPassword(password, user.password);
       } else if (walletAddress && signature) {
-        // For wallet authentication, implement signature verification
-        // This is a simplified version - in production, verify the signature
-        isValid = user.walletAddress === walletAddress;
+        // SIWE-style verification using nonce cookie and claimed address
+        if (!message) {
+          return NextResponse.json(
+            { success: false, error: 'Missing signed message' },
+            { status: 400 }
+          );
+        }
+
+        const reqNonce = request.cookies.get('siwe_nonce')?.value;
+        const reqAddr = request.cookies.get('siwe_addr')?.value;
+        if (!reqNonce) {
+          return NextResponse.json(
+            { success: false, error: 'Missing nonce (call /api/auth/nonce first)' },
+            { status: 400 }
+          );
+        }
+
+        const messageContainsNonce = message.includes(reqNonce);
+        const addressMatches = reqAddr ? reqAddr === walletAddress.toLowerCase() : true;
+
+        isValid =
+          user.walletAddress === walletAddress &&
+          messageContainsNonce &&
+          addressMatches &&
+          verifyWalletSignature(message, signature, walletAddress);
       }
 
       if (!isValid) {

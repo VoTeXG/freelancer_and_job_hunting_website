@@ -6,11 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Modal from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { 
-  UserCircleIcon,
-  PlusIcon,
-  XMarkIcon 
-} from '@heroicons/react/24/outline';
+import { LazyIcon } from '@/components/ui/LazyIcon';
 
 const profileSchema = z.object({
   username: z.string().min(3, 'Username must be at least 3 characters'),
@@ -94,7 +90,7 @@ export default function ProfileEditModal({
         {/* Profile Picture */}
         <div className="flex items-center space-x-4">
           <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center">
-            <UserCircleIcon className="w-12 h-12 text-gray-400" />
+            <LazyIcon name="UserCircleIcon" className="w-12 h-12 text-gray-400" />
           </div>
           <div>
             <Button type="button" variant="outline" size="sm">
@@ -170,7 +166,7 @@ export default function ProfileEditModal({
                   onClick={() => removeSkill(skill)}
                   className="ml-2 text-blue-600 hover:text-blue-800"
                 >
-                  <XMarkIcon className="h-3 w-3" />
+                  <LazyIcon name="XMarkIcon" className="h-3 w-3" />
                 </button>
               </span>
             ))}
@@ -190,7 +186,7 @@ export default function ProfileEditModal({
               size="sm"
               onClick={addSkill}
             >
-              <PlusIcon className="h-4 w-4" />
+              <LazyIcon name="PlusIcon" className="h-4 w-4" />
             </Button>
           </div>
         </div>

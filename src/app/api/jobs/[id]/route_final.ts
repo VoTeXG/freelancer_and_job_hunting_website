@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { verifyCsrf, ensureJson, sanitizeText } from '@/lib/security';
+import { verifyAccessToken } from '@/lib/auth';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const job = await prisma.job.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         client: {
           include: {
@@ -50,9 +52,15 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const csrf = verifyCsrf(request);
+    if (!csrf.ok) {
+      return NextResponse.json({ success: false, error: csrf.reason || 'CSRF failed' }, { status: 403 });
+    }
+    const ct = ensureJson(request);
+    if (!ct.ok) return NextResponse.json({ success: false, error: ct.reason }, { status: 415 });
     const authHeader = request.headers.get('authorization');
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -65,20 +73,18 @@ export async function POST(
     const token = authHeader.split(' ')[1];
     
     try {
-      const decoded = verifyToken(token);
-      
-      if (!decoded) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid token' },
-          { status: 401 }
-        );
+      const access = verifyAccessToken(token);
+      if (!access) return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 });
+      if (!access.scope?.includes('write:applications')) {
+        return NextResponse.json({ success: false, error: 'Forbidden: missing scope write:applications' }, { status: 403 });
       }
-      
-      const freelancerId = decoded.userId;
+      const freelancerId = access.sub;
       const applicationData = await request.json();
 
       // Validate required fields
-      const { coverLetter, proposedRate, estimatedDuration } = applicationData;
+  let { coverLetter, proposedRate, estimatedDuration } = applicationData as any;
+  coverLetter = sanitizeText(coverLetter, { maxLength: 5000 });
+  estimatedDuration = sanitizeText(estimatedDuration, { maxLength: 100 });
       
       if (!coverLetter || !proposedRate || !estimatedDuration) {
         return NextResponse.json(
@@ -88,8 +94,9 @@ export async function POST(
       }
 
       // Check if job exists and is open
+      const { id } = await params;
       const job = await prisma.job.findUnique({
-        where: { id: params.id },
+        where: { id },
       });
 
       if (!job) {
@@ -107,10 +114,10 @@ export async function POST(
       }
 
       // Check if user already applied
-      const existingApplication = await prisma.application.findUnique({
+  const existingApplication = await prisma.application.findUnique({
         where: {
           jobId_freelancerId: {
-            jobId: params.id,
+    jobId: id,
             freelancerId,
           },
         },
@@ -124,9 +131,9 @@ export async function POST(
       }
 
       // Create application
-      const application = await prisma.application.create({
+    const application = await prisma.application.create({
         data: {
-          jobId: params.id,
+      jobId: id,
           freelancerId,
           coverLetter,
           proposedRate: parseFloat(proposedRate),

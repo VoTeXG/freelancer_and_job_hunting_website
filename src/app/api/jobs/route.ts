@@ -9,6 +9,7 @@ import { withCommonHeaders, preflightResponse, respondWithJSONAndETag } from '@/
 import { verifyCsrf, sanitizeText, sanitizeStringArray, ensureJson } from '@/lib/security';
 import { loggerWithRequest } from '@/lib/logger';
 import { ServerTiming, withTiming } from '@/lib/timing';
+import { recordEvent } from '@/lib/analytics';
 
 export async function OPTIONS() { return preflightResponse(); }
 
@@ -181,11 +182,14 @@ export async function GET(request: NextRequest) {
     // Merge timing
     const existing = response.headers.get('Server-Timing');
     response.headers.set('Server-Timing', timing.mergeInto(existing));
-    log.info('jobs_list.query.success', { count: (jobsRaw as any[]).length, totalCount });
+  const jobCount = (jobsRaw as any[]).length;
+  log.info('jobs_list.query.success', { count: jobCount, totalCount });
+  recordEvent('jobs.list', { count: jobCount, total: totalCount, page, limit, basic: selectMode === 'basic' });
     return response;
 
   } catch (error) {
     log.error('jobs_list.query.error', { err: (error as any)?.message });
+    recordEvent('jobs.list.error', { message: (error as any)?.message });
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

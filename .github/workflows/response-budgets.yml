@@ -1,0 +1,45 @@
+name: Typecheck and API Response Budgets
+
+on:
+  pull_request:
+    branches: [ master, main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Start Next dev server
+        run: npm run dev & sleep 5
+
+      - name: Wait for server
+        run: |
+          for i in {1..30}; do
+            if curl -sSf http://localhost:3000/ > /dev/null; then
+              echo "Server ready"; exit 0; fi; sleep 1; done
+          echo "Server not ready"; exit 1
+
+      - name: Check API response budgets
+        env:
+          PROFILE_BUDGET_BEARER: ${{ secrets.PROFILE_BUDGET_BEARER }}
+        run: npm run budget:responses

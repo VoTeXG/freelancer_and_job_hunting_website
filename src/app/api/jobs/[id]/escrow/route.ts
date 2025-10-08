@@ -4,6 +4,7 @@ import { verifyAccessToken } from '@/lib/auth';
 import { rateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { preflightResponse, withCommonHeaders } from '@/lib/apiHeaders';
+import { recordEvent } from '@/lib/analytics';
 import { verifyCsrf, ensureJson } from '@/lib/security';
 
 export async function OPTIONS() { return preflightResponse(); }
@@ -76,6 +77,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           },
           select: { id: true, escrowPending: true, escrowDeploymentAttempts: true },
         });
+        recordEvent('escrow.action', { action: 'retry', jobId: id });
         break;
       }
       case 'mark_deployed': {
@@ -91,6 +93,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           },
           select: { id: true, escrowDeployed: true, escrowOnChainId: true },
         });
+        recordEvent('escrow.action', { action: 'mark_deployed', jobId: id });
         break;
       }
       case 'fail': {
@@ -102,6 +105,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           data: { escrowPending: false },
           select: { id: true, escrowPending: true },
         });
+        recordEvent('escrow.action', { action: 'fail', jobId: id });
         break;
       }
       case 'release': {
@@ -112,6 +116,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         const escrowId = Number((job as any).escrowOnChainId);
         const idx = (typeof (parsed.data as any).milestoneIndex === 'number') ? (parsed.data as any).milestoneIndex : undefined;
         const res = NextResponse.json({ success: true, action: 'release', escrowId, milestoneIndex: idx });
+        recordEvent('escrow.action', { action: 'release', jobId: id });
         return withCommonHeaders(res);
       }
       case 'rollback_request': {
@@ -123,6 +128,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           data: { escrowRollbackRequested: true, escrowRollbackReason: reason || null },
           select: { id: true, escrowRollbackRequested: true, escrowRollbackReason: true }
         });
+              recordEvent('escrow.action', { action: 'rollback_request', jobId: id });
         break;
       }
       case 'rollback_confirm': {
@@ -137,6 +143,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           data: { escrowPending: false, escrowRollbackRequested: false, escrowCancelledAt: new Date() },
           select: { id: true, escrowCancelledAt: true }
         });
+              recordEvent('escrow.action', { action: 'rollback_confirm', jobId: id });
         break;
       }
     }

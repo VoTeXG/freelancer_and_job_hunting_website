@@ -3,17 +3,13 @@
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import FinancialDashboard from '@/components/FinancialDashboard';
-import MessagingSystem from '@/components/MessagingSystem';
-import MultiTokenPayments from '@/components/MultiTokenPayments';
-import {
-  ChartBarIcon,
-  ChatBubbleLeftRightIcon,
-  CurrencyDollarIcon,
-  MagnifyingGlassIcon,
-  AdjustmentsHorizontalIcon,
-  CreditCardIcon
-} from '@heroicons/react/24/outline';
+import PageContainer from '@/components/PageContainer';
+import SectionHeader from '@/components/SectionHeader';
+import dynamic from 'next/dynamic';
+const MessagingSystem = dynamic(() => import('@/components/MessagingSystem'), { ssr: false, loading: () => <div className="p-4 text-gray-500">Loading messages…</div> });
+const FinancialDashboard = dynamic(() => import('@/components/FinancialDashboard'), { ssr: false, loading: () => <div className="p-4 text-gray-500">Loading dashboard…</div> });
+const MultiTokenPayments = dynamic(() => import('@/components/MultiTokenPayments'), { ssr: false, loading: () => <div className="p-4 text-gray-500">Loading payments…</div> });
+import { LazyIcon } from '@/components/ui/LazyIcon';
 
 type TabType = 'dashboard' | 'messages' | 'financial' | 'search' | 'payments';
 
@@ -24,31 +20,31 @@ export default function AdvancedFeaturesPage() {
     {
       id: 'dashboard' as TabType,
       name: 'Dashboard Overview',
-      icon: ChartBarIcon,
+  icon: 'ChartBarIcon' as const,
       description: 'View your complete freelancer dashboard'
     },
     {
       id: 'messages' as TabType,
       name: 'Messaging',
-      icon: ChatBubbleLeftRightIcon,
+  icon: 'ChatBubbleLeftRightIcon' as const,
       description: 'Chat with clients and collaborators'
     },
     {
       id: 'financial' as TabType,
       name: 'Financial Analytics',
-      icon: CurrencyDollarIcon,
+  icon: 'CurrencyDollarIcon' as const,
       description: 'Detailed financial insights and analytics'
     },
     {
       id: 'search' as TabType,
       name: 'Advanced Search',
-      icon: MagnifyingGlassIcon,
+  icon: 'MagnifyingGlassIcon' as const,
       description: 'AI-powered job and talent matching'
     },
     {
       id: 'payments' as TabType,
       name: 'Multi-Token Payments',
-      icon: CreditCardIcon,
+  icon: 'CreditCardIcon' as const,
       description: 'Send payments with various cryptocurrencies'
     }
   ];
@@ -59,7 +55,7 @@ export default function AdvancedFeaturesPage() {
         return (
           <div className="space-y-6">
             <div className="text-center py-12">
-              <ChartBarIcon className="h-16 w-16 text-blue-500 mx-auto mb-4" />
+              <LazyIcon name="ChartBarIcon" className="h-16 w-16 text-blue-500 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 Enhanced Dashboard
               </h3>
@@ -97,7 +93,7 @@ export default function AdvancedFeaturesPage() {
                       className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <Button>
-                      <MagnifyingGlassIcon className="h-4 w-4 mr-2" />
+                      <LazyIcon name="MagnifyingGlassIcon" className="h-4 w-4 mr-2" />
                       Search
                     </Button>
                   </div>
@@ -105,7 +101,7 @@ export default function AdvancedFeaturesPage() {
                   {/* Advanced Filters */}
                   <div className="border-t pt-4">
                     <div className="flex items-center mb-4">
-                      <AdjustmentsHorizontalIcon className="h-5 w-5 text-gray-500 mr-2" />
+                      <LazyIcon name="AdjustmentsHorizontalIcon" className="h-5 w-5 text-gray-500 mr-2" />
                       <h4 className="font-medium text-gray-900">Advanced Filters</h4>
                     </div>
                     
@@ -238,36 +234,30 @@ export default function AdvancedFeaturesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Advanced Features Hub
-          </h1>
-          <p className="text-lg text-gray-600">
-            Access advanced functionality for professional freelancing
-          </p>
-        </div>
+      <PageContainer>
+        <SectionHeader title="Advanced Features Hub" subtitle="Access advanced functionality for professional freelancing" />
 
         {/* Tab Navigation */}
         <div className="mb-8">
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex space-x-8">
               {tabs.map((tab) => {
-                const Icon = tab.icon;
+                const iconName = tab.icon;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
+                    className={`group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                       activeTab === tab.id
-                        ? 'border-blue-500 text-blue-600'
+                        ? 'border-purple-600 text-purple-700'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
-                    <Icon
+                    <LazyIcon
+                      name={iconName}
                       className={`mr-2 h-5 w-5 ${
                         activeTab === tab.id
-                          ? 'text-blue-500'
+                          ? 'text-purple-600'
                           : 'text-gray-400 group-hover:text-gray-500'
                       }`}
                     />
@@ -285,7 +275,7 @@ export default function AdvancedFeaturesPage() {
             {renderTabContent()}
           </div>
         </div>
-      </div>
+  </PageContainer>
     </div>
   );
 }

@@ -1,17 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { useWallet } from '@/hooks/useWallet';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import {
-  PaperAirplaneIcon,
-  PaperClipIcon,
-  FaceSmileIcon,
-  PhoneIcon,
-  VideoCameraIcon
-} from '@heroicons/react/24/outline';
+import { LazyIcon } from '@/components/ui/LazyIcon';
 
 interface Message {
   id: string;
@@ -41,7 +36,7 @@ interface Conversation {
 }
 
 export default function MessagingSystem() {
-  const { address, isConnected } = useWallet();
+  const { wallet } = useWallet();
   const { socket } = useNotifications();
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -51,10 +46,10 @@ export default function MessagingSystem() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isConnected && address) {
+    if (wallet.isConnected && wallet.address) {
       fetchConversations();
     }
-  }, [isConnected, address]);
+  }, [wallet.isConnected, wallet.address]);
 
   useEffect(() => {
     if (selectedConversation) {
@@ -122,9 +117,9 @@ export default function MessagingSystem() {
           ],
           lastMessage: {
             id: 'msg2',
-            senderId: address || '',
+            senderId: wallet.address || '',
             senderName: 'You',
-            content: 'I\'ll have the design mockups ready by tomorrow.',
+            content: "I'll have the design mockups ready by tomorrow.",
             timestamp: new Date(Date.now() - 7200000).toISOString(),
             type: 'text'
           },
@@ -154,7 +149,7 @@ export default function MessagingSystem() {
         },
         {
           id: '2',
-          senderId: address || '',
+          senderId: wallet.address || '',
           senderName: 'You',
           content: 'Hi Alice! Thanks for choosing me. I\'ve reviewed your requirements and I\'m ready to get started.',
           timestamp: new Date(Date.now() - 82800000).toISOString(),
@@ -189,7 +184,7 @@ export default function MessagingSystem() {
   };
 
   const handleNewMessage = (message: Message) => {
-    if (selectedConversation && message.senderId !== address) {
+    if (selectedConversation && message.senderId !== wallet.address) {
       setMessages(prev => [...prev, message]);
     }
     
@@ -200,7 +195,7 @@ export default function MessagingSystem() {
           ? {
               ...conv,
               lastMessage: message,
-              unreadCount: message.senderId === address ? 0 : conv.unreadCount + 1
+              unreadCount: message.senderId === wallet.address ? 0 : conv.unreadCount + 1
             }
           : conv
       )
@@ -234,7 +229,7 @@ export default function MessagingSystem() {
 
     const message: Message = {
       id: Date.now().toString(),
-      senderId: address || '',
+      senderId: wallet.address || '',
       senderName: 'You',
       content: newMessage.trim(),
       timestamp: new Date().toISOString(),
@@ -280,7 +275,7 @@ export default function MessagingSystem() {
   const selectedConv = conversations.find(c => c.id === selectedConversation);
   const otherParticipant = selectedConv?.participants[0];
 
-  if (!isConnected) {
+  if (!wallet.isConnected) {
     return (
       <div className="text-center py-12">
         <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -312,11 +307,16 @@ export default function MessagingSystem() {
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <div className="relative">
-                    <img
+                  <div className="relative w-10 h-10">
+                    <span className="sr-only">{participant.name}</span>
+                    <Image
                       src={participant.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(participant.name)}&background=6366f1&color=fff`}
                       alt={participant.name}
-                      className="w-10 h-10 rounded-full"
+                      width={40}
+                      height={40}
+                      className="rounded-full object-cover"
+                      sizes="40px"
+                      loading="lazy"
                     />
                     {participant.isOnline && (
                       <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
@@ -355,11 +355,16 @@ export default function MessagingSystem() {
             <div className="p-4 border-b border-gray-200 bg-gray-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="relative">
-                    <img
+                  <div className="relative w-10 h-10">
+                    <span className="sr-only">{otherParticipant?.name}</span>
+                    <Image
                       src={otherParticipant?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(otherParticipant?.name || '')}&background=6366f1&color=fff`}
-                      alt={otherParticipant?.name}
-                      className="w-10 h-10 rounded-full"
+                      alt={otherParticipant?.name || ''}
+                      width={40}
+                      height={40}
+                      className="rounded-full object-cover"
+                      sizes="40px"
+                      loading="lazy"
                     />
                     {otherParticipant?.isOnline && (
                       <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
@@ -377,10 +382,10 @@ export default function MessagingSystem() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <Button size="sm" variant="outline">
-                    <PhoneIcon className="h-4 w-4" />
+                    <LazyIcon name="PhoneIcon" className="h-4 w-4" />
                   </Button>
                   <Button size="sm" variant="outline">
-                    <VideoCameraIcon className="h-4 w-4" />
+                    <LazyIcon name="VideoCameraIcon" className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
@@ -394,18 +399,18 @@ export default function MessagingSystem() {
                 messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`flex ${message.senderId === address ? 'justify-end' : 'justify-start'}`}
+                    className={`flex ${message.senderId === wallet.address ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
                       className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                        message.senderId === address
+                        message.senderId === wallet.address
                           ? 'bg-blue-500 text-white'
                           : 'bg-gray-200 text-gray-900'
                       }`}
                     >
                       {message.type === 'file' ? (
                         <div className="flex items-center space-x-2">
-                          <PaperClipIcon className="h-4 w-4" />
+                          <LazyIcon name="PaperClipIcon" className="h-4 w-4" />
                           <span className="text-sm">{message.fileName}</span>
                         </div>
                       ) : (
@@ -413,7 +418,7 @@ export default function MessagingSystem() {
                       )}
                       <p
                         className={`text-xs mt-1 ${
-                          message.senderId === address ? 'text-blue-100' : 'text-gray-500'
+                          message.senderId === wallet.address ? 'text-blue-100' : 'text-gray-500'
                         }`}
                       >
                         {formatTimestamp(message.timestamp)}
@@ -429,7 +434,7 @@ export default function MessagingSystem() {
             <div className="p-4 border-t border-gray-200 bg-gray-50">
               <div className="flex items-center space-x-2">
                 <Button size="sm" variant="outline">
-                  <PaperClipIcon className="h-4 w-4" />
+                  <LazyIcon name="PaperClipIcon" className="h-4 w-4" />
                 </Button>
                 <div className="flex-1 relative">
                   <input
@@ -445,7 +450,7 @@ export default function MessagingSystem() {
                     variant="outline"
                     className="absolute right-2 top-1/2 transform -translate-y-1/2 rounded-full p-1"
                   >
-                    <FaceSmileIcon className="h-4 w-4" />
+                    <LazyIcon name="FaceSmileIcon" className="h-4 w-4" />
                   </Button>
                 </div>
                 <Button 
@@ -453,7 +458,7 @@ export default function MessagingSystem() {
                   disabled={!newMessage.trim()}
                   className="rounded-full p-2"
                 >
-                  <PaperAirplaneIcon className="h-4 w-4" />
+                  <LazyIcon name="PaperAirplaneIcon" className="h-4 w-4" />
                 </Button>
               </div>
             </div>

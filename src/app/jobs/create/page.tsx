@@ -7,13 +7,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { 
-  CurrencyDollarIcon,
-  CalendarIcon,
-  ClockIcon,
-  PlusIcon,
-  XMarkIcon
-} from '@heroicons/react/24/outline';
+import PageContainer from '@/components/PageContainer';
+import SectionHeader from '@/components/SectionHeader';
+import { LazyIcon } from '@/components/ui/LazyIcon';
 
 const jobSchema = z.object({
   title: z.string().min(10, 'Title must be at least 10 characters long'),
@@ -129,11 +125,8 @@ export default function CreateJobPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Post a New Job</h1>
-        <p className="text-gray-600 mt-2">Find the perfect freelancer for your project</p>
-      </div>
+    <PageContainer className="max-w-4xl">
+      <SectionHeader title="Post a New Job" subtitle="Find the perfect freelancer for your project" />
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* Basic Information */}
@@ -149,7 +142,7 @@ export default function CreateJobPage() {
               <input
                 {...register('title')}
                 type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 placeholder="e.g., Build a responsive React web application"
               />
               {errors.title && (
@@ -164,7 +157,7 @@ export default function CreateJobPage() {
               <textarea
                 {...register('description')}
                 rows={6}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 placeholder="Describe your project in detail. Include what you need, your expectations, and any specific requirements..."
               />
               {errors.description && (
@@ -179,7 +172,7 @@ export default function CreateJobPage() {
               <input
                 {...register('duration')}
                 type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 placeholder="e.g., 2 weeks, 1-3 months, Less than 1 week"
               />
               {errors.duration && (
@@ -192,11 +185,11 @@ export default function CreateJobPage() {
                 Project Deadline (Optional)
               </label>
               <div className="relative">
-                <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <LazyIcon name="CalendarIcon" className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input
                   {...register('deadline')}
                   type="date"
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 />
               </div>
             </div>
@@ -207,7 +200,7 @@ export default function CreateJobPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
-              <CurrencyDollarIcon className="h-5 w-5" />
+              <LazyIcon name="CurrencyDollarIcon" className="h-5 w-5" />
               <span>Budget</span>
             </CardTitle>
           </CardHeader>
@@ -225,7 +218,7 @@ export default function CreateJobPage() {
                     className="sr-only"
                   />
                   <div className={`w-4 h-4 border-2 rounded-full mr-3 ${
-                    budgetType === 'fixed' ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                    budgetType === 'fixed' ? 'border-purple-500 bg-purple-500' : 'border-gray-300'
                   }`}>
                     {budgetType === 'fixed' && (
                       <div className="w-2 h-2 bg-white rounded-full mx-auto mt-0.5"></div>
@@ -245,7 +238,7 @@ export default function CreateJobPage() {
                     className="sr-only"
                   />
                   <div className={`w-4 h-4 border-2 rounded-full mr-3 ${
-                    budgetType === 'hourly' ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                    budgetType === 'hourly' ? 'border-purple-500 bg-purple-500' : 'border-gray-300'
                   }`}>
                     {budgetType === 'hourly' && (
                       <div className="w-2 h-2 bg-white rounded-full mx-auto mt-0.5"></div>
@@ -273,7 +266,7 @@ export default function CreateJobPage() {
                     type="number"
                     step="0.01"
                     min="0"
-                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                     placeholder="0.00"
                   />
                 </div>
@@ -288,7 +281,7 @@ export default function CreateJobPage() {
                 </label>
                 <select
                   {...register('currency')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="USD">USD</option>
                   <option value="EUR">EUR</option>
@@ -316,11 +309,11 @@ export default function CreateJobPage() {
                   value={skillInput}
                   onChange={(e) => setSkillInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   placeholder="e.g., React, Node.js, Python"
                 />
                 <Button type="button" onClick={addSkill} variant="outline">
-                  <PlusIcon className="h-4 w-4" />
+                  <LazyIcon name="PlusIcon" className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -332,15 +325,15 @@ export default function CreateJobPage() {
                   {skills.map((skill, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                      className="inline-flex items-center px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm"
                     >
                       {skill}
                       <button
                         type="button"
                         onClick={() => removeSkill(skill)}
-                        className="ml-1 text-blue-600 hover:text-blue-800"
+                        className="ml-1 text-purple-600 hover:text-purple-800"
                       >
-                        <XMarkIcon className="h-3 w-3" />
+                        <LazyIcon name="XMarkIcon" className="h-3 w-3" />
                       </button>
                     </span>
                   ))}
@@ -369,11 +362,11 @@ export default function CreateJobPage() {
                   value={requirementInput}
                   onChange={(e) => setRequirementInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addRequirement())}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   placeholder="e.g., Must be available during EST business hours"
                 />
                 <Button type="button" onClick={addRequirement} variant="outline">
-                  <PlusIcon className="h-4 w-4" />
+                  <LazyIcon name="PlusIcon" className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -390,7 +383,7 @@ export default function CreateJobPage() {
                         onClick={() => removeRequirement(index)}
                         className="text-red-600 hover:text-red-800"
                       >
-                        <XMarkIcon className="h-4 w-4" />
+                        <LazyIcon name="XMarkIcon" className="h-4 w-4" />
                       </button>
                     </li>
                   ))}
@@ -417,6 +410,6 @@ export default function CreateJobPage() {
           </Button>
         </div>
       </form>
-    </div>
+  </PageContainer>
   );
 }

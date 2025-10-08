@@ -1,92 +1,107 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { verifyCsrf, ensureJson } from '@/lib/security';
+import { verifyAccessToken } from '@/lib/auth';
 
+// Accept or reject an application for a job (client-only)
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string; applicationId: string } }
+  { params }: { params: Promise<{ id: string; applicationId: string }> }
 ) {
   try {
-    await connectDB();
-
+    const csrf = verifyCsrf(request);
+    if (!csrf.ok) {
+      return NextResponse.json({ success: false, error: csrf.reason || 'CSRF failed' }, { status: 403 });
+    }
+  const ct = ensureJson(request);
+  if (!ct.ok) return NextResponse.json({ success: false, error: ct.reason }, { status: 415 });
     const { action } = await request.json();
+    const { id: jobId, applicationId } = await params;
     const authHeader = request.headers.get('authorization');
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
-        { success: false, error: 'No token provided' },
+        { success: false, error: 'Authentication required' },
         { status: 401 }
       );
     }
 
     const token = authHeader.split(' ')[1];
-    
+
+    let clientId: string | undefined;
     try {
-      const decoded = verifyToken(token);
-      const clientId = decoded.userId;
-
-      // Find the job and verify ownership
-      const job = await Job.findOne({ 
-        _id: params.id, 
-        clientId: clientId 
-      });
-
-      if (!job) {
-        return NextResponse.json(
-          { success: false, error: 'Job not found or access denied' },
-          { status: 404 }
-        );
+      const access = verifyAccessToken(token);
+      if (!access) throw new Error('Invalid token');
+      if (!access.scope?.includes('write:applications')) {
+        return NextResponse.json({ success: false, error: 'Forbidden: missing scope write:applications' }, { status: 403 });
       }
-
-      // Validate action
-      if (!['accept', 'reject'].includes(action)) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid action' },
-          { status: 400 }
-        );
-      }
-
-      // Find and update the application
-      const applicationIndex = job.applicants.findIndex(
-        (app: any) => app._id.toString() === params.applicationId
-      );
-
-      if (applicationIndex === -1) {
-        return NextResponse.json(
-          { success: false, error: 'Application not found' },
-          { status: 404 }
-        );
-      }
-
-      // Update application status
-      job.applicants[applicationIndex].status = action === 'accept' ? 'accepted' : 'rejected';
-
-      // If accepting an application, you might want to reject all others
-      if (action === 'accept') {
-        job.applicants.forEach((app: any, index: number) => {
-          if (index !== applicationIndex && app.status === 'pending') {
-            app.status = 'rejected';
-          }
-        });
-        
-        // Optionally update job status to 'in-progress' or 'assigned'
-        job.status = 'in-progress';
-      }
-
-      await job.save();
-
-      return NextResponse.json({
-        success: true,
-        message: `Application ${action}ed successfully`
-      });
-
-    } catch (tokenError) {
+      clientId = access.sub;
+    } catch {
       return NextResponse.json(
         { success: false, error: 'Invalid token' },
         { status: 401 }
       );
     }
 
+    // Validate action
+    if (!['accept', 'reject'].includes(action)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid action' },
+        { status: 400 }
+      );
+    }
+
+    // Ensure the job exists and belongs to the authenticated client
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, clientId },
+      select: { id: true },
+    });
+
+    if (!job) {
+      return NextResponse.json(
+        { success: false, error: 'Job not found or access denied' },
+        { status: 404 }
+      );
+    }
+
+    // Ensure the application exists and belongs to this job
+    const application = await prisma.application.findUnique({
+      where: { id: applicationId },
+      select: { id: true, jobId: true, status: true },
+    });
+
+    if (!application || application.jobId !== jobId) {
+      return NextResponse.json(
+        { success: false, error: 'Application not found' },
+        { status: 404 }
+      );
+    }
+
+    if (action === 'accept') {
+      // Accept this application, reject other pending ones, move job to IN_PROGRESS
+      await prisma.$transaction([
+        prisma.application.update({
+          where: { id: applicationId },
+          data: { status: 'ACCEPTED' },
+        }),
+        prisma.application.updateMany({
+          where: { jobId, NOT: { id: applicationId }, status: 'PENDING' },
+          data: { status: 'REJECTED' },
+        }),
+        prisma.job.update({ where: { id: jobId }, data: { status: 'IN_PROGRESS' } }),
+      ]);
+    } else {
+      // Reject just this application
+      await prisma.application.update({
+        where: { id: applicationId },
+        data: { status: 'REJECTED' },
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Application ${action}ed successfully`,
+    });
   } catch (error) {
     console.error('Application update error:', error);
     return NextResponse.json(
