@@ -296,9 +296,11 @@ Phase 5 will be declared COMPLETE when all of the following are true:
 
 ### 🎯 Observability & Analytics
 - [x] Error tracking (Sentry) backend + frontend (initial integration, DSN optional)
-- [ ] Usage funnels / events (PostHog or lightweight custom logger)
-- [ ] Enrich `Server-Timing` with DB + cache segments
+- [x] Server-Timing enrichment (jobs endpoint DB timings)
+- [x] Admin health endpoint (`/api/admin/health`) with DB + migration count
+- [ ] Usage funnels / events (PostHog or lightweight custom logger wrapper)
 - [ ] Latency & error budget dashboard (basic thresholds)
+- [ ] Add cache timing segments once caching layer introduced
 
 ### 🛠️ Real-time & Messaging
 - [ ] Socket layer selection (Socket.IO self-host vs Pusher/Ably) finalized
