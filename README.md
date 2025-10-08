@@ -1,5 +1,7 @@
 # BlockFreelancer - Blockchain Freelance Platform
 
+[![Script Consistency Status](https://github.com/OWNER_ORG/REPO_NAME/actions/workflows/script-consistency.yml/badge.svg)](./.github/workflows/script-consistency.yml)
+
 A modern, decentralized freelance platform built with Next.js, TypeScript, and Web3 technologies. This thesis project demonstrates the integration of blockchain technology into freelance work, providing secure payments, transparent reputation systems, and decentralized identity management.
 
 ## 🌟 Features
@@ -191,6 +193,38 @@ await connectWallet('metaMask');
     - Install k6 (https://k6.io/docs/get-started/installation/)
     - Start dev server
     - Run: `k6 run scripts/perf/k6-baseline.js` (optionally `BASE_URL=https://your-host`)
+
+### CI Workflows
+- Script Consistency & Typecheck (`.github/workflows/script-consistency.yml`)
+  - Runs on push/PR to master/main
+  - Steps: install deps, run script consistency checker (`scripts/check-scripts.ts`), then TypeScript typecheck
+  - Fails fast if required scripts missing or types break
+
+#### Script Consistency Checker Details
+The checker distinguishes between:
+
+Required scripts (errors if missing):
+`dev`, `build`, `start`, `lint`, `typecheck`, `prisma:generate`
+
+Recommended scripts (warnings if missing):
+`seed:admin`, `check:scripts`, `budget:responses`
+
+Run manually:
+```
+npx tsx scripts/check-scripts.ts
+```
+
+Auto-fix missing required scripts (adds safe defaults):
+```
+npx tsx scripts/check-scripts.ts --fix
+```
+
+Auto-fix required + recommended:
+```
+npx tsx scripts/check-scripts.ts --fix=all
+```
+
+If you consistently see a required script reported missing even though it's present in `package.json`, check for parent `package-lock.json` files (the checker warns about these) and remove or isolate them to avoid npm resolution anomalies.
 
 ### Code Quality
 - TypeScript for type safety
