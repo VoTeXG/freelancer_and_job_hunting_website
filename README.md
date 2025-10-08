@@ -284,6 +284,11 @@ Client auto-refresh behavior:
 ### Admin testing (wallet allowlist)
 - Set `ADMIN_WALLETS` in your `.env.local` to a comma-separated list of wallet addresses that should receive admin privileges, for example:
    - `ADMIN_WALLETS=0xYourWalletAddressHere,0xAnotherAdmin`
+ - Alternatively (dev only), run `npm run seed:admin` to create a password user:
+   - Username: `Admin`
+   - Password: `admin`
+   - Prints an access token in console; you can also login via `/login` (ensure CSRF cookie first by visiting site).
+   - Change defaults with env vars before running: `SEED_ADMIN_USERNAME`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`.
 - When a listed wallet logs in (SIWE verify), the access token gains the `admin:all` scope.
 - To verify:
    1. Log in with your allowlisted wallet.

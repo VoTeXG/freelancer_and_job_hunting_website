@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { comparePassword, generateAccessToken, defaultScopes, issueRefreshToken } from '@/lib/auth';
+import { comparePassword, generateAccessToken, defaultScopes, issueRefreshToken, withAdminScope } from '@/lib/auth';
 import { z } from 'zod';
 import { withCommonHeaders, preflightResponse } from '@/lib/apiHeaders';
 import { rateLimit } from '@/lib/rateLimit';
@@ -62,7 +62,8 @@ export async function POST(req: NextRequest) {
       return withCommonHeaders(NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 }));
     }
 
-  const token = generateAccessToken({ sub: user.id, usr: user.username, scope: defaultScopes(user.userType), typ: 'access' });
+  const scopes = withAdminScope(defaultScopes(user.userType), user.walletAddress || (user.username.toLowerCase() === 'admin' ? undefined : undefined));
+  const token = generateAccessToken({ sub: user.id, usr: user.username, scope: scopes, typ: 'access' });
   const { raw: refreshRaw, expiresAt } = await issueRefreshToken(user.id, { userAgent: req.headers.get('user-agent') || undefined, ip });
 
     const { password: _pw, ...safeUser } = user;

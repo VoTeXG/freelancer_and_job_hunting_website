@@ -74,6 +74,7 @@
     "solidity-coverage": "^0.8.16",
     "start-server-and-test": "^2.0.3",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typechain": "^8.3.2",
     "typescript": "^5"
   }

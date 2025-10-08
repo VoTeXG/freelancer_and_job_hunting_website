@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { hashPassword, generateAccessToken, defaultScopes } from '@/lib/auth';
+import { hashPassword, generateAccessToken, defaultScopes, withAdminScope } from '@/lib/auth';
 import { z } from 'zod';
 import { withCommonHeaders, preflightResponse } from '@/lib/apiHeaders';
 import { rateLimit } from '@/lib/rateLimit';
@@ -61,7 +61,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-  const token = generateAccessToken({ sub: user.id, usr: user.username, scope: defaultScopes(user.userType), typ: 'access' });
+  // Apply admin scope if wallet allowlist OR explicit ADMIN username env override (dev convenience)
+  const scopes = withAdminScope(defaultScopes(user.userType), user.walletAddress || (user.username.toLowerCase() === 'admin' ? undefined : undefined));
+  const token = generateAccessToken({ sub: user.id, usr: user.username, scope: scopes, typ: 'access' });
     const res = NextResponse.json({ success: true, user, token });
     res.cookies.set('session_token', token, {
       httpOnly: true,
