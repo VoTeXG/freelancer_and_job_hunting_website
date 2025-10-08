@@ -215,22 +215,16 @@ A decentralized freelance platform leveraging blockchain technology for secure p
 - Added `NEXT_PUBLIC_CI_MINIMAL_WEB3` flag to shrink hydration in CI
 - k6 baseline script for throughput
 
-### 🔄 In Progress / Near-Term
-1. Escrow & Payments Polish
-   - Rollback / cancellation strategy (TBD)
-2. Accessibility
-   - Keyboard focus trapping in modals
-   - ARIA labels for chips & interactive elements
-3. Token Scope Decision
-   - Clarify ETH-only vs. multi-token default for first launch
-4. Refresh Token Migration Rollout
-   - Ensure `RefreshToken` table deployed across all environments
+### 🔄 In Progress / Near-Term (Closed Out)
+All initial near-term items for Phase 5 addressed or deferred to Phase 6 (see Phase 6 plan). Remaining work now lives under Phase 6.
 
 ### 🧪 Testing & Stability
 - Deterministic API tests for critical flows (post job, apply, drafts, escrow lifecycle)
 - Playwright UI scenario coverage (SIWE, posting, applying, escrow)
 - Flaky spec isolated with retries (`draft-conflict.spec.ts`)
-- Plan: add contract fuzz tests & API contract matrix for freelancer filters
+- Refresh token rotation test added (`refresh-rotation.spec.ts`)
+- Escrow rollback lifecycle test added (`escrow-rollback.spec.ts`)
+- Upcoming (Phase 6): contract fuzz tests & API contract matrix for freelancer filters
 
 ### 🔍 Observability & Performance
 - ETag + Cache-Control differentiation (public vs private GETs)
@@ -301,7 +295,7 @@ Phase 5 will be declared COMPLETE when all of the following are true:
 **Status: PLANNED**
 
 ### 🎯 Observability & Analytics
-- [ ] Error tracking (Sentry) backend + frontend (source maps uploaded)
+- [x] Error tracking (Sentry) backend + frontend (initial integration, DSN optional)
 - [ ] Usage funnels / events (PostHog or lightweight custom logger)
 - [ ] Enrich `Server-Timing` with DB + cache segments
 - [ ] Latency & error budget dashboard (basic thresholds)
