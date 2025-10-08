@@ -188,6 +188,7 @@ await connectWallet('metaMask');
 - `npm run typecheck` - TypeScript type checks
 - `npm run budget:responses` - Check API response payload budgets (requires dev server)
 - `npm run check:scripts` (if listed) OR `npx tsx scripts/check-scripts.ts` - Verify required script entries & detect parent lockfile conflicts
+ - `npm run check:scripts:fix` - Auto-add any missing required scripts (safe defaults)
  - Playwright E2E: `npm run test:e2e` (UI: `npm run test:e2e:ui`)
  - k6 baseline (optional):
     - Install k6 (https://k6.io/docs/get-started/installation/)
@@ -223,6 +224,14 @@ Auto-fix required + recommended:
 ```
 npx tsx scripts/check-scripts.ts --fix=all
 ```
+
+Shortcut npm scripts:
+```
+npm run check:scripts       # read-only validation
+npm run check:scripts:fix   # --fix for required only
+```
+
+CI Note: The workflow intentionally does NOT use --fix to avoid silently mutating package.json; fixes should be committed explicitly.
 
 If you consistently see a required script reported missing even though it's present in `package.json`, check for parent `package-lock.json` files (the checker warns about these) and remove or isolate them to avoid npm resolution anomalies.
 
