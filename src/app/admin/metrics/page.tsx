@@ -59,16 +59,17 @@ export default function AdminMetricsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Metrics Dashboard</h1>
         <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} /> Auto Refresh
+          <label htmlFor="auto-refresh" className="flex items-center gap-2 text-sm">
+            <input id="auto-refresh" type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} /> Auto Refresh
           </label>
-          <select className="border rounded px-2 py-1 text-sm" value={intervalMs} onChange={e => setIntervalMs(Number(e.target.value))}>
+          <label htmlFor="refresh-interval" className="sr-only">Refresh Interval</label>
+          <select id="refresh-interval" className="border rounded px-2 py-1 text-sm" value={intervalMs} onChange={e => setIntervalMs(Number(e.target.value))}>
             <option value={2000}>2s</option>
             <option value={5000}>5s</option>
             <option value={10000}>10s</option>
             <option value={30000}>30s</option>
           </select>
-          <button onClick={load} className="bg-blue-600 text-white text-sm px-3 py-1 rounded hover:bg-blue-700">Refresh</button>
+          <button onClick={load} className="bg-blue-600 text-white text-sm px-3 py-1 rounded hover:bg-blue-700" aria-label="Refresh metrics">Refresh</button>
         </div>
       </div>
       {error && <div className="text-red-600 text-sm">Error: {error}</div>}
@@ -98,6 +99,32 @@ export default function AdminMetricsPage() {
               </div>
             </section>
           )}
+          <section>
+            <h2 className="font-medium mb-2">Rate Limiting</h2>
+            <div className="grid md:grid-cols-4 gap-4 mb-4">
+              {['event.ratelimit.allow','event.ratelimit.block'].map(k => (
+                <div key={k} className="border rounded p-3 bg-white/50 dark:bg-zinc-900/40 shadow-sm">
+                  <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">{k}</div>
+                  <div className="text-lg font-semibold tabular-nums">{data.counters[k] || 0}</div>
+                </div>
+              ))}
+              <RateLimitRatio counters={data.counters} />
+            </div>
+            <p className="text-xs text-gray-500 max-w-prose">Counters increment on each token bucket decision. <strong>allow</strong> = request consumed a token; <strong>block</strong> = bucket empty (HTTP 429 advisable). Use these to monitor burstiness and tune limits.</p>
+          </section>
+          <section>
+            <h2 className="font-medium mb-2">Cache</h2>
+            <div className="grid md:grid-cols-5 gap-4 mb-4">
+              {['event.cache.hit','event.cache.miss','event.cache.version.bump'].map(k => (
+                <div key={k} className="border rounded p-3 bg-white/50 dark:bg-zinc-900/40 shadow-sm">
+                  <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">{k}</div>
+                  <div className="text-lg font-semibold tabular-nums">{data.counters[k] || 0}</div>
+                </div>
+              ))}
+              <CacheHitRatio counters={data.counters} />
+            </div>
+            <p className="text-xs text-gray-500 max-w-prose">Hit ratio guides TTL & key strategy tuning. Low ratio may indicate overly specific cache keys or too-short TTL. Version bumps invalidate groups; monitor for excessive churn.</p>
+          </section>
           <section>
             <h2 className="font-medium mb-2">Recent Events (most recent first)</h2>
             <div className="overflow-x-auto border rounded">
@@ -194,6 +221,38 @@ const AvailabilityCard: React.FC<{ availability: SLOAvailability }> = ({ availab
       <div className="space-y-1 text-xs"><div className="text-gray-500">Burn 60m</div><div className="font-mono">{burnRateLong == null ? '—' : burnRateLong.toFixed(2)}x</div></div>
       <div className="space-y-1 text-xs"><div className="text-gray-500">Remaining Budget</div><div className="font-mono">{formatRate(remainingBudget)}</div></div>
       <div className="space-y-1 text-xs flex flex-col items-start"><div className="text-gray-500">Status</div><span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusColor(status)}`}>{status}</span></div>
+    </div>
+  );
+};
+
+const RateLimitRatio: React.FC<{ counters: MetricCounters }> = ({ counters }) => {
+  const allow = counters['event.ratelimit.allow'] || 0;
+  const block = counters['event.ratelimit.block'] || 0;
+  const total = allow + block;
+  const blockRate = total > 0 ? (block / total) : 0;
+  return (
+    <div className="border rounded p-3 bg-white/50 dark:bg-zinc-900/40 shadow-sm flex flex-col justify-between">
+      <div>
+        <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">ratelimit.block_rate</div>
+        <div className="text-lg font-semibold tabular-nums">{(blockRate*100).toFixed(1)}%</div>
+      </div>
+      <div className="text-[10px] text-gray-500 mt-1">{block}/{total} blocked</div>
+    </div>
+  );
+};
+
+const CacheHitRatio: React.FC<{ counters: MetricCounters }> = ({ counters }) => {
+  const hit = counters['event.cache.hit'] || 0;
+  const miss = counters['event.cache.miss'] || 0;
+  const total = hit + miss;
+  const ratio = total > 0 ? (hit / total) : 0;
+  return (
+    <div className="border rounded p-3 bg-white/50 dark:bg-zinc-900/40 shadow-sm flex flex-col justify-between">
+      <div>
+        <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">cache.hit_ratio</div>
+        <div className="text-lg font-semibold tabular-nums">{(ratio*100).toFixed(1)}%</div>
+      </div>
+      <div className="text-[10px] text-gray-500 mt-1">{hit}/{total} hits</div>
     </div>
   );
 };

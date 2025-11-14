@@ -90,6 +90,9 @@ export default function NotificationCenter() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
+        aria-label="Notifications"
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
       >
   <LazyIcon name="BellIcon" className="h-6 w-6" />
         {unreadCount > 0 && (
@@ -129,6 +132,7 @@ export default function NotificationCenter() {
                 <button
                   onClick={() => setIsOpen(false)}
                   className="text-gray-400 hover:text-gray-600"
+                  aria-label="Close notifications"
                 >
                   <LazyIcon name="XMarkIcon" className="h-4 w-4" />
                 </button>

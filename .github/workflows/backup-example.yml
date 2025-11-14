@@ -1,0 +1,33 @@
+# Example (disabled) scheduled backup workflow.
+# To enable: set the job condition to true (remove the `if: ${{ false }}`) and adjust schedule / secrets.
+name: database-backup-example
+on:
+  schedule:
+    - cron: '0 3 * * *' # 03:00 UTC daily
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    if: ${{ false }} # set to true or remove to enable
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install pg_dump
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Run backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_DIR: backups
+        run: |
+          npm install --no-audit --no-fund
+          npx tsx scripts/backup-db.ts
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+            name: db-backup
+            path: backups/*.sql.gz
+            retention-days: 14

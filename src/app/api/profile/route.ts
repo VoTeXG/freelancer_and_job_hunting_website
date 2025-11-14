@@ -5,6 +5,7 @@ import { verifyAccessToken } from '@/lib/auth';
 import { withCommonHeaders, preflightResponse, respondWithJSONAndETag } from '@/lib/apiHeaders';
 import { verifyCsrf, escapeHTML, ensureJson, sanitizeText, sanitizeStringArray } from '@/lib/security';
 import { z } from 'zod';
+import { bumpVersion } from '@/lib/cache';
 
 export async function OPTIONS() { return preflightResponse(); }
 
@@ -214,6 +215,8 @@ export async function PUT(request: NextRequest) {
         },
         message: 'Profile updated successfully',
   });
+  // Invalidate freelancers listing caches (title, rate, rating, skills changes should reflect quickly)
+  bumpVersion('freelancers_list').catch(()=>{});
   return withCommonHeaders(res);
 
     } catch (tokenError) {

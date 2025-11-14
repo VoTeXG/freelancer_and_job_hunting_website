@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { BudgetType } from '@prisma/client';
 import { verifyAccessToken } from '@/lib/auth';
 import { rateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { JobCoreSchema } from '@/lib/validation/job';
+import { sanitizeUserHTML, sanitizeRichTextHTML } from '@/lib/sanitize';
 import { withCommonHeaders, preflightResponse, respondWithJSONAndETag } from '@/lib/apiHeaders';
 import { verifyCsrf, sanitizeText, sanitizeStringArray, ensureJson } from '@/lib/security';
 import { loggerWithRequest } from '@/lib/logger';
-import { ServerTiming, withTiming } from '@/lib/timing';
+import { ServerTiming, withTiming } from '@/lib/serverTiming';
 import { recordEvent } from '@/lib/analytics';
 import { withLatency } from '@/lib/metrics';
+import { bumpVersion } from '@/lib/cache';
+import { cacheJSON } from '@/lib/cache';
 
 export async function OPTIONS() { return preflightResponse(); }
 
@@ -95,8 +97,11 @@ export async function GET(request: NextRequest) {
       // Calculate pagination
       const skip = (page - 1) * limit;
 
-      // Execute queries in parallel
-      const jobsPromise = withTiming(timing, 'db_jobs', () => prisma.job.findMany({
+      const cacheEligible = !clientOnly && selectMode !== 'basic';
+      const cacheKeyObj = { page, limit, search, budgetType, skillsParam, sort, minBudget, maxBudget };
+      const cacheKey = Buffer.from(JSON.stringify(cacheKeyObj)).toString('base64url');
+
+      const fetchJobs = () => withTiming(timing, 'db_jobs', () => prisma.job.findMany({
           where,
           // Cast to any to allow newly migrated escrow fields while TS JobSelect not yet reflecting them (editor cache issue)
           select: ({
@@ -143,8 +148,30 @@ export async function GET(request: NextRequest) {
           skip,
           take: limit,
         }) as any);
-      const countPromise = withTiming(timing, 'db_count', () => prisma.job.count({ where }));
-      const [jobsRaw, totalCount] = await Promise.all([jobsPromise, countPromise]);
+
+  let jobsRaw: any[] = [];
+  let totalCount = 0; let cacheHit = false;
+      if (cacheEligible) {
+        const { value, hit } = await cacheJSON('jobs', cacheKey, {
+          versionNs: 'jobs_list',
+          ttlSeconds: 30,
+          timing,
+          build: async () => {
+            const [jr, cnt] = await Promise.all([
+              fetchJobs(),
+              withTiming(timing, 'db_count', () => prisma.job.count({ where }))
+            ]);
+            return { jr, cnt };
+          }
+        });
+  jobsRaw = value.jr as any[]; totalCount = Number(value.cnt as any); cacheHit = hit;
+      } else {
+        const [jr, cnt] = await Promise.all([
+          fetchJobs(),
+          withTiming(timing, 'db_count', () => prisma.job.count({ where }))
+        ]);
+  jobsRaw = jr as any[]; totalCount = Number(cnt as any);
+      }
 
       const jobs = selectMode === 'basic'
         ? (jobsRaw as any[]).map((j: any) => ({
@@ -181,6 +208,9 @@ export async function GET(request: NextRequest) {
       meta: { mode: selectMode || 'full' }
     };
       const response = respondWithJSONAndETag(request, baseResp, { headers: { 'Cache-Control': isAuthedClientView ? 'private, max-age=0, no-cache' : 'public, max-age=30, s-maxage=60' } });
+      if (cacheEligible) {
+        response.headers.set('X-Cache', cacheHit ? 'HIT' : 'MISS');
+      }
       // Merge timing
       const existing = response.headers.get('Server-Timing');
       response.headers.set('Server-Timing', timing.mergeInto(existing));
@@ -212,16 +242,14 @@ export async function POST(request: NextRequest) {
         { status: 429 }
       );
     }
-    const authHeader = request.headers.get('authorization');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const authHeader = request.headers.get('authorization') || '';
+    const token = request.cookies.get('session_token')?.value || (authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : undefined);
+    if (!token) {
       return NextResponse.json(
         { success: false, error: 'No token provided' },
         { status: 401 }
       );
     }
-
-    const token = authHeader.split(' ')[1];
     
     try {
       const access = verifyAccessToken(token);
@@ -246,7 +274,13 @@ export async function POST(request: NextRequest) {
   let { title, description, budgetAmount, budgetType, duration, skills, useBlockchain } = parsed.data as any;
   // Sanitize text fields and arrays (defensive; zod handles shape)
   title = sanitizeText(title, { maxLength: 140 });
-  description = sanitizeText(description, { maxLength: 10000 });
+  // Rich text sanitization: attempt rich policy first, fallback to basic if needed
+  const descText = sanitizeText(description, { maxLength: 10000 });
+  try {
+    description = sanitizeRichTextHTML(descText);
+  } catch {
+    description = sanitizeUserHTML(descText);
+  }
   duration = sanitizeText(duration, { maxLength: 100 });
   skills = sanitizeStringArray(skills, { itemMaxLength: 40, maxItems: 50 });
 
@@ -258,8 +292,8 @@ export async function POST(request: NextRequest) {
           description,
           clientId,
           budgetAmount: Number(budgetAmount),
-          // Cast to Prisma enum type; zod transform already upper-cased
-          budgetType: budgetType as BudgetType,
+          // Prisma expects enum string; zod transform already upper-cased ('FIXED' | 'HOURLY')
+          budgetType: budgetType as any,
           currency: (parsed.data as any).currency || 'USD',
           duration,
           deadline: (parsed.data as any).deadline ? new Date((parsed.data as any).deadline) : null,
@@ -284,6 +318,8 @@ export async function POST(request: NextRequest) {
         job,
         message: 'Job created successfully',
   });
+  // Invalidate / version bump for public jobs list cache
+  bumpVersion('jobs_list').catch(()=>{});
   return withCommonHeaders(res);
 
     } catch (tokenError) {

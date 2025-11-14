@@ -8,6 +8,13 @@ import { FreelancerProfile } from '@/types';
 import PageContainer from '@/components/PageContainer';
 import SectionHeader from '@/components/SectionHeader';
 import { LazyIcon } from '@/components/ui/LazyIcon';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { CardSkeleton } from '@/components/ui/SkeletonPresets';
+import { EmptyState } from '@/components/ui/states/EmptyState';
+import { ErrorState } from '@/components/ui/states/ErrorState';
+import { Select } from '@/components/ui/form';
+import { useApiErrorHandlers } from '@/lib/queryClient';
+import Reveal from '@/components/Reveal';
 
 interface ApiFreelancer extends Omit<FreelancerProfile, 'createdAt' | 'updatedAt' | 'portfolio' | 'languages' | 'certifications' | 'email'> {
   createdAt: string;
@@ -31,6 +38,7 @@ export default function FreelancersPage() {
   const [minRating, setMinRating] = useState<string>('');
   const pageSize = 12;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const { toastError } = useApiErrorHandlers();
 
   // Debounce search
   const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
@@ -60,11 +68,21 @@ export default function FreelancersPage() {
         setTotalCount(data.pagination.totalCount);
         setHasNextPage(data.pagination.hasNextPage);
       } catch (e:any) {
-        if (e.name !== 'AbortError') setError(e.message);
+        if (e.name !== 'AbortError') {
+          setError(e.message);
+          toastError(e.message || 'Failed to load freelancers', 'Load failed');
+        }
       } finally { setLoading(false); }
     })();
     return () => controller.abort();
   }, [debouncedSearch, selectedSkills, availabilityFilter, rateRange.min, rateRange.max, sortBy, minExperience, minRating, page]);
+
+  // Reset pagination and results when filters/search change
+  useEffect(() => {
+    setPage(1);
+    setFreelancers([]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, availabilityFilter, sortBy, rateRange.min, rateRange.max, minExperience, minRating, selectedSkills.join(',')]);
 
   // Infinite scroll
   useEffect(() => {
@@ -102,15 +120,18 @@ export default function FreelancersPage() {
 
   return (
     <PageContainer>
-      {/* Header */}
-      <SectionHeader
-        title="Find Freelancers"
-        subtitle="Connect with skilled blockchain and Web3 developers"
-      />
+      {/* Standardized Section Header */}
+      <div className="mb-6 animate-fade-up">
+        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+          <span className="bg-clip-text text-transparent bg-gradient-to-r from-[var(--brand-600)] to-blue-600">Find Freelancers</span>
+        </h1>
+        <p className="text-[var(--text-muted)] text-lg">Connect with skilled blockchain and Web3 developers</p>
+      </div>
 
       {/* Search and Filters */}
-      <Card className="mb-8 border-0 shadow-sm ring-1 ring-gray-200/70 rounded-2xl bg-white/90 backdrop-blur">
-        <CardContent className="p-6">
+      <div className="sticky top-16 z-40 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-4 pb-2 bg-[var(--surface-primary)]/85 backdrop-blur supports-[backdrop-filter]:bg-[var(--surface-primary)]/70 border-b border-[var(--border-primary)]">
+      <Card glass hoverable density="compact" className="mb-6 ring-1 ring-[var(--border-primary)]/70 rounded-2xl animate-fade-up">
+        <CardContent density="compact">
           {/* Search Bar */}
           <div className="relative mb-6">
             <LazyIcon name="MagnifyingGlassIcon" className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -155,18 +176,20 @@ export default function FreelancersPage() {
 
             {/* Availability Filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="availability-filter" className="block text-sm font-medium text-gray-700 mb-2">
                 Availability
               </label>
-              <select
+              <Select
+                id="availability-filter"
+                aria-label="Availability"
                 value={availabilityFilter}
                 onChange={(e) => setAvailabilityFilter(e.target.value as 'all' | 'available' | 'busy')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                uiSize="md"
               >
                 <option value="all">All Freelancers</option>
                 <option value="available">Available Now</option>
                 <option value="busy">Busy</option>
-              </select>
+              </Select>
             </div>
 
             {/* Hourly Rate Range */}
@@ -194,19 +217,21 @@ export default function FreelancersPage() {
 
             {/* Sort By */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="freelancers-sort-by" className="block text-sm font-medium text-gray-700 mb-2">
                 Sort By
               </label>
-              <select
+              <Select
+                id="freelancers-sort-by"
+                aria-label="Sort By"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                uiSize="md"
               >
                 <option value="rating">Highest Rated</option>
                 <option value="rate">Lowest Rate</option>
                 <option value="experience">Most Experienced</option>
                 <option value="recent">Most Recent</option>
-              </select>
+              </Select>
             </div>
           </div>
           {/* Advanced toggle placeholder */}
@@ -244,10 +269,11 @@ export default function FreelancersPage() {
             )}
           </div>
         </CardContent>
-      </Card>
+  </Card>
+  </div>
 
       {/* Results */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-6 animate-fade-up">
         <p className="text-gray-600">
           {loading ? 'Loading freelancers...' : `Showing ${freelancers.length} of ${totalCount} freelancer${totalCount !== 1 ? 's' : ''}`}
         </p>
@@ -260,18 +286,26 @@ export default function FreelancersPage() {
       </div>
 
       {/* Freelancer Cards */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {!loading && displayFreelancers.map(f => (
-          <FreelancerCard key={f.id} freelancer={f} />
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 animate-fade-up">
+        {!loading && displayFreelancers.map((f, idx) => (
+          <Reveal key={f.id} delay={Math.min(400, idx * 60)}>
+            <FreelancerCard freelancer={f} />
+          </Reveal>
         ))}
         {loading && (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 col-span-full">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 col-span-full animate-fade-up">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-64 rounded-2xl bg-gradient-to-r from-gray-100 via-gray-50 to-gray-100 animate-pulse" />
+              <Reveal key={i} delay={i * 60}>
+                <CardSkeleton />
+              </Reveal>
             ))}
           </div>
         )}
-        {error && !loading && <div className="col-span-full text-center text-red-600 text-sm">{error}</div>}
+        {error && !loading && (
+          <div className="col-span-full">
+            <ErrorState message={error} onRetry={() => { setPage(1); setFreelancers([]); }} />
+          </div>
+        )}
       </div>
 
       {/* Sentinel */}
@@ -282,19 +316,13 @@ export default function FreelancersPage() {
 
       {/* No Results */}
   {!loading && freelancers.length === 0 && (
-        <div className="text-center py-12">
-          <LazyIcon name="UserGroupIcon" className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No freelancers found</h3>
-          <p className="text-gray-500">
-            Try adjusting your search criteria or browse all freelancers
-          </p>
-          <Button 
-            className="mt-4" 
-    onClick={clearFilters}
-          >
-            Clear Filters
-          </Button>
-        </div>
+        <EmptyState
+          icon="UserGroupIcon"
+          title="No freelancers found"
+          description="Try adjusting your search criteria or browse all freelancers"
+          actionLabel="Clear Filters"
+          onAction={clearFilters}
+        />
       )}
   {/* hidden sentinel ensures layout reserved */}
   <div style={{ height: 1 }} />

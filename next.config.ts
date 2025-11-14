@@ -30,9 +30,11 @@ const nextConfig: NextConfig = {
     return config;
   },
   images: {
-    remotePatterns: [
-      { protocol: 'https', hostname: '**' },
-    ],
+    // Allow broad remote images for now (tighten with explicit host list in production)
+    remotePatterns: [ { protocol: 'https', hostname: '**' } ],
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [360, 414, 640, 768, 1024, 1280, 1536, 1920],
+    imageSizes: [16, 24, 32, 48, 64, 96, 128, 256],
   },
   async headers() {
     return [
@@ -50,18 +52,46 @@ const nextConfig: NextConfig = {
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
         ],
       },
+      // Long-lived immutable caching for build-time static assets (fingerprinted).
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }
+        ]
+      },
+      // Public assets (can be replaced; use shorter max-age + stale-while-revalidate)
+      {
+        source: '/public/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' }
+        ]
+      },
+      // Image optimization caching guidance (the Next.js image optimizer sets headers; this is for any manual image routes)
+      {
+        source: '/images/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=604800, stale-while-revalidate=2592000' }
+        ]
+      }
     ];
-  },
-  sentry: {
-    hideSourceMaps: true,
-    disableServerWebpackPlugin: !process.env.SENTRY_DSN,
-    disableClientWebpackPlugin: !process.env.SENTRY_DSN,
   }
 };
 
 const baseConfig = withBundleAnalyzer(nextConfig);
-export default withSentryConfig ? withSentryConfig(baseConfig, {
-  silent: true,
-  org: process.env.SENTRY_ORG || 'example',
-  project: process.env.SENTRY_PROJECT || 'blockfreelancer'
-}) : baseConfig;
+export default withSentryConfig
+  ? withSentryConfig(
+      baseConfig,
+      // sentryWebpackPluginOptions
+      {
+        silent: true,
+        org: process.env.SENTRY_ORG || 'example',
+        project: process.env.SENTRY_PROJECT || 'blockfreelancer',
+      },
+      // sentryNextOptions
+      {
+        hideSourceMaps: true,
+        disableServerWebpackPlugin: !process.env.SENTRY_DSN,
+        disableClientWebpackPlugin: !process.env.SENTRY_DSN,
+      }
+    )
+  : baseConfig;

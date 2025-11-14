@@ -9,9 +9,10 @@ export async function OPTIONS() { return preflightResponse(); }
 
 function authUser(req: NextRequest) {
   const auth = req.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return null;
+  const token = req.cookies.get('session_token')?.value || (auth?.startsWith('Bearer ') ? auth.split(' ')[1] : undefined);
+  if (!token) return null;
   try {
-    const access = verifyAccessToken(auth.split(' ')[1]);
+    const access = verifyAccessToken(token);
     if (!access) return null;
     if (!access.scope?.includes('write:jobs')) return null;
     return { userId: access.sub } as any;

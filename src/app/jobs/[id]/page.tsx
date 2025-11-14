@@ -7,8 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LazyIcon } from '@/components/ui/LazyIcon';
 import { useAuth } from '@/providers/AuthProvider';
-import { useNotifications } from '@/providers/NotificationProvider';
+import { useApiErrorHandlers } from '@/lib/queryClient';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import Reveal from '@/components/Reveal';
 
 const JobApplicationModal = dynamic(
   () => import('@/components/JobApplicationModal'),
@@ -26,7 +27,7 @@ export default function JobDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const { token, user } = useAuth();
-  const { addNotification } = useNotifications();
+  const { toastSuccess, toastError, bannerError } = useApiErrorHandlers();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
@@ -66,15 +67,14 @@ export default function JobDetailPage() {
       
       if (data.success) {
         setShowApplicationModal(false);
-        // Show success message
-        addNotification({ type: 'job_application', title: 'Application Submitted', message: 'Your proposal was sent.', data: { jobId }, timestamp: new Date().toISOString() });
+        toastSuccess('Your proposal was sent.', 'Application submitted');
         fetchJob(); // Refresh job data
       } else {
-        addNotification({ type: 'new_message', title: 'Application Failed', message: data.error || 'Failed to submit application', data: { jobId }, timestamp: new Date().toISOString() });
+        toastError(data.error || 'Failed to submit application', 'Application failed');
       }
     } catch (error) {
       console.error('Failed to apply:', error);
-      addNotification({ type: 'new_message', title: 'Application Error', message: 'Failed to submit application', data: { jobId }, timestamp: new Date().toISOString() });
+      toastError('Failed to submit application', 'Application error');
     } finally {
       setIsApplying(false);
     }
@@ -101,16 +101,16 @@ export default function JobDetailPage() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        addNotification({ type: 'job_application', title: 'Application Updated', message: 'Your proposal was updated.', data: { jobId }, timestamp: new Date().toISOString() });
+        toastSuccess('Your proposal was updated.', 'Application updated');
         setShowApplicationModal(false);
         setIsEditing(false);
         fetchJob();
       } else {
-        addNotification({ type: 'new_message', title: 'Update Failed', message: data.error || 'Failed to update application', data: { jobId }, timestamp: new Date().toISOString() });
+        toastError(data.error || 'Failed to update application', 'Update failed');
       }
     } catch (e) {
       console.error('Edit application failed:', e);
-      addNotification({ type: 'new_message', title: 'Update Error', message: 'Failed to update application', data: { jobId }, timestamp: new Date().toISOString() });
+      toastError('Failed to update application', 'Update error');
     } finally {
       setIsApplying(false);
     }
@@ -131,14 +131,14 @@ export default function JobDetailPage() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        addNotification({ type: 'job_application', title: 'Application Withdrawn', message: 'Your proposal was withdrawn.', data: { jobId }, timestamp: new Date().toISOString() });
+        toastSuccess('Your proposal was withdrawn.', 'Application withdrawn');
         fetchJob();
       } else {
-        addNotification({ type: 'new_message', title: 'Withdraw Failed', message: data.error || 'Failed to withdraw', data: { jobId }, timestamp: new Date().toISOString() });
+        toastError(data.error || 'Failed to withdraw', 'Withdraw failed');
       }
     } catch (e) {
       console.error('Withdraw application failed:', e);
-      addNotification({ type: 'new_message', title: 'Withdraw Error', message: 'Failed to withdraw', data: { jobId }, timestamp: new Date().toISOString() });
+      toastError('Failed to withdraw', 'Withdraw error');
     } finally {
       setIsWithdrawing(false);
       setConfirmOpen(false);
@@ -148,10 +148,10 @@ export default function JobDetailPage() {
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 rounded w-3/4"></div>
-          <div className="h-32 bg-gray-200 rounded"></div>
-          <div className="h-48 bg-gray-200 rounded"></div>
+        <div className="space-y-6">
+          <div className="h-8 bg-gray-200 rounded w-3/4 skeleton-shimmer"></div>
+          <div className="h-32 bg-gray-200 rounded skeleton-shimmer"></div>
+          <div className="h-48 bg-gray-200 rounded skeleton-shimmer"></div>
         </div>
       </div>
     );
@@ -217,22 +217,25 @@ export default function JobDetailPage() {
       />
 
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">{job.title}</h1>
-        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-          <span>Posted {timeAgo(job.createdAt)}</span>
-          <span>•</span>
-          <span>{applicantsCount} proposal{applicantsCount !== 1 ? 's' : ''}</span>
-          <span>•</span>
-          <span className="capitalize">{String(job.status || '').toLowerCase().replace('-', ' ')}</span>
+      <Reveal>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">{job.title}</h1>
+          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+            <span>Posted {timeAgo(job.createdAt)}</span>
+            <span>•</span>
+            <span>{applicantsCount} proposal{applicantsCount !== 1 ? 's' : ''}</span>
+            <span>•</span>
+            <span className="capitalize">{String(job.status || '').toLowerCase().replace('-', ' ')}</span>
+          </div>
         </div>
-      </div>
+      </Reveal>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Job Description */}
-          <Card>
+          <Reveal delay={50}>
+          <Card hoverable glass>
             <CardHeader>
               <CardTitle>Job Description</CardTitle>
             </CardHeader>
@@ -242,10 +245,12 @@ export default function JobDetailPage() {
               </p>
             </CardContent>
           </Card>
+          </Reveal>
 
           {/* Requirements */}
           {job.requirements && job.requirements.length > 0 && (
-            <Card>
+            <Reveal delay={100}>
+            <Card hoverable glass>
               <CardHeader>
                 <CardTitle>Requirements</CardTitle>
               </CardHeader>
@@ -260,10 +265,12 @@ export default function JobDetailPage() {
                 </ul>
               </CardContent>
             </Card>
+            </Reveal>
           )}
 
           {/* Skills */}
-          <Card>
+          <Reveal delay={150}>
+          <Card hoverable glass>
             <CardHeader>
               <CardTitle>Skills Required</CardTitle>
             </CardHeader>
@@ -280,18 +287,26 @@ export default function JobDetailPage() {
               </div>
             </CardContent>
           </Card>
+          </Reveal>
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Apply Button */}
           {isOpenStatus && (
-            <Card>
+            <Reveal delay={200}>
+            <Card hoverable glass>
               <CardContent className="p-6">
         {!myApplication ? (
                   <Button 
                     className="w-full mb-4"
-                    onClick={() => setShowApplicationModal(true)}
+                    onClick={() => {
+                      if (!token) {
+                        bannerError('Please log in to apply to this job.');
+                        return;
+                      }
+                      setShowApplicationModal(true);
+                    }}
                   >
                     <LazyIcon name="PaperAirplaneIcon" className="h-4 w-4 mr-2" />
                     Apply Now
@@ -302,10 +317,16 @@ export default function JobDetailPage() {
           You applied with ${'{'}myApplication.proposedRate{'}'} and status { '{'}myApplication.status{'}' }.
                     </div>
                     <div className="flex gap-3">
-          <Button variant="outline" className="flex-1" onClick={openEditModal} disabled={isWithdrawing || myApplication.status !== 'PENDING'}>
+          <Button variant="outline" className="flex-1" loading={isApplying} loadingText="Saving..." onClick={() => {
+                          if (!token) { bannerError('Please log in to edit your application.'); return; }
+                          openEditModal();
+                        }} disabled={isWithdrawing || myApplication.status !== 'PENDING'}>
                         <LazyIcon name="PencilSquareIcon" className="h-4 w-4 mr-2" /> Edit
                       </Button>
-          <Button variant="destructive" className="flex-1" onClick={handleWithdraw} disabled={isWithdrawing || myApplication.status !== 'PENDING'}>
+          <Button variant="destructive" className="flex-1" loading={isWithdrawing} loadingText="Withdrawing..." onClick={() => {
+                          if (!token) { bannerError('Please log in to withdraw your application.'); return; }
+                          handleWithdraw();
+                        }} disabled={isWithdrawing || myApplication.status !== 'PENDING'}>
                         <LazyIcon name="XMarkIcon" className="h-4 w-4 mr-2" /> Withdraw
                       </Button>
                     </div>
@@ -316,6 +337,7 @@ export default function JobDetailPage() {
                 </p>
               </CardContent>
             </Card>
+            </Reveal>
           )}
 
           <ConfirmDialog
@@ -329,7 +351,8 @@ export default function JobDetailPage() {
           />
 
           {/* Job Details */}
-          <Card>
+          <Reveal delay={250}>
+          <Card hoverable glass>
             <CardHeader>
               <CardTitle>Job Details</CardTitle>
             </CardHeader>
@@ -365,9 +388,11 @@ export default function JobDetailPage() {
               )}
             </CardContent>
           </Card>
+          </Reveal>
 
           {/* Client Info */}
-          <Card>
+          <Reveal delay={300}>
+          <Card hoverable glass>
             <CardHeader>
               <CardTitle>About the Client</CardTitle>
             </CardHeader>
@@ -396,6 +421,7 @@ export default function JobDetailPage() {
               </div>
             </CardContent>
           </Card>
+          </Reveal>
         </div>
       </div>
     </div>

@@ -71,8 +71,22 @@ export default function DashboardEnhanced() {
         fetch('/api/applications', { headers })
       ]);
 
-      const jobsResult = await jobsResponse.json();
-      const applicationsResult = await applicationsResponse.json();
+      // Defensive: if server returned HTML (redirect/error), avoid JSON parse crash
+      async function safeJson(res: Response) {
+        const ct = res.headers.get('Content-Type') || '';
+        const text = await res.text();
+        if (ct.includes('application/json')) {
+          try { return JSON.parse(text); } catch { return { success: false, error: 'Invalid JSON' }; }
+        }
+        if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
+          return { success: false, error: 'Received HTML (possible redirect or auth error)' };
+        }
+        // Treat plain text as error wrapper
+        return { success: false, error: text.slice(0,200) };
+      }
+
+      const jobsResult = await safeJson(jobsResponse);
+      const applicationsResult = await safeJson(applicationsResponse);
 
       // Load blockchain data (mock functions for now)
       const [escrows, reputation, certificates] = await Promise.all([
@@ -104,8 +118,9 @@ export default function DashboardEnhanced() {
         const pending = (jobsResult.jobs || []).filter((j: any) => j.useBlockchain && !j.escrowDeployed);
         setPendingEscrows(pending.slice(0,10));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load dashboard data:', error);
+      setStats(s => ({ ...s }));
     } finally {
       setLoading(false);
     }

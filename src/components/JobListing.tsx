@@ -149,8 +149,8 @@ export default function JobListing({ job, onApply, onOpenApplyModal, showApply =
       </CardContent>
 
       <CardFooter className="p-6 pt-0 space-x-2">
-        <Button variant="outline" size="sm" className="flex-1 border-gray-200 hover:border-purple-300 hover:text-purple-700">
-          <Link href={`/jobs/${id}`} className="w-full">
+        <Button variant="outline" size="sm" className="flex-1 border-gray-200 hover:border-purple-300 hover:text-purple-700" asChild>
+          <Link href={`/jobs/${id}`} aria-label={`View details for ${title}`} className="w-full">
             View Details
           </Link>
         </Button>

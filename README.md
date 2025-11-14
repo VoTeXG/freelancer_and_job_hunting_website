@@ -27,6 +27,25 @@ A modern, decentralized freelance platform built with Next.js, TypeScript, and W
 - **Professional UI**: Clean, modern interface with accessibility features
 
 ## 🛠️ Technology Stack
+## 📚 Documentation & Guides
+Core operational and developer documentation lives under `docs/`:
+- Runbook: `docs/RUNBOOK.md`
+- API Reference: `docs/API_REFERENCE.md`
+- Contract ABI Summary: `docs/CONTRACT_ABI_SUMMARY.md`
+- Escrow Flow Guide: `docs/GUIDE_ESCROW_FLOW.md`
+- Conflict Resolution UX: `docs/GUIDE_CONFLICT_RESOLUTION.md`
+- FAQ & Troubleshooting: `docs/FAQ_TROUBLESHOOTING.md`
+
+Additional visual overview:
+- Architecture Diagrams: `docs/DIAGRAMS.md`
+
+These documents are version-controlled; update alongside feature or protocol changes. Link key updates in CHANGELOG (future) or project roadmap.
+
+More resources:
+- Developer Guide: `docs/DEVELOPER_GUIDE.md`
+- Public Roadmap: `docs/ROADMAP_PUBLIC.md`
+- Changelog: `CHANGELOG.md`
+- Support: `.github/SUPPORT.md`
 
 ### Frontend
 - **Next.js 15** - React framework with App Router
@@ -257,7 +276,49 @@ Troubleshooting “Missing CSRF token”:
    - If a refresh fails due to CSRF, the client will fetch `/api/auth/nonce` and retry once automatically.
    - For API calls from external tools (curl/Postman), include the `csrf_token` cookie and send the same value in `X-CSRF-Token` header. The nonce endpoint (`POST /api/auth/nonce`) returns and sets it.
 
+Temporarily disable CSRF (dev/demo only):
+- Server: set `REQUIRE_CSRF=false` in your environment (e.g., PowerShell: `$env:REQUIRE_CSRF='false'; npm run dev`).
+- Client: set `NEXT_PUBLIC_REQUIRE_CSRF=false` so the client stops sending CSRF headers and skips nonce bootstrap.
+- Important: This weakens protection against cross-site requests. Only disable in trusted local environments, and re-enable before deploying.
+
 ### CI: API response budgets
+### Caching & Observability
+### Rich Text Editor & Sanitization
+Job descriptions now support a controlled rich text subset via a Quill-based editor. The backend enforces HTML sanitization using two tiers:
+
+1. Basic (legacy) sanitizer for minimal formatting.
+2. `sanitizeRichTextHTML` for headings, lists, blockquotes, links, inline code and pre blocks.
+
+Security Posture:
+- Disallows script/style tags (replaced / stripped defensively).
+- Strips `javascript:` & `data:` protocols from links; enforces `rel="noopener noreferrer"` on external targets.
+- No inline styles or event handlers permitted.
+- Protocol allowlist: http, https, mailto.
+
+Renderer:
+- `SafeRichText` component re-sanitizes by default before rendering (`dangerouslySetInnerHTML`).
+- Truncation pathway strips tags before truncating to avoid HTML breakage.
+
+Future Enhancements:
+- Attachment embedding validation.
+- Automatic linkification (currently deferred for explicit UX control).
+- Diff-based sanitization metrics (count removed attributes / tags for anomaly detection).
+
+The jobs list endpoint uses a coarse-grained versioned key strategy. Instrumentation now records:
+
+- `event.cache.hit` / `event.cache.miss` – per resolved cache decision
+- `event.cache.version.bump` – when a namespace version increments (invalidating that group)
+
+The `/admin/metrics` dashboard surfaces raw counters plus a derived hit ratio and rate limit block ratio to guide tuning:
+
+Recommendations:
+1. Aim for an initial 40–60% hit ratio under mixed traffic before refining TTL/keys.
+2. If misses dominate, evaluate whether keys include volatile filters or TTL is too short.
+3. High version bump frequency may indicate overly broad invalidation; consider more granular namespaces.
+4. Once stable, export metrics to Prometheus (`/api/admin/metrics.prom`) and build alerts on hit ratio or sudden version bump spikes.
+
+Planned next steps (Phase 6 Scaling & Caching backlog): freelancer list caching, cache latency segments, and eviction pressure metrics.
+
 - GitHub Actions workflow (`.github/workflows/response-budgets.yml`) enforces payload budgets using `scripts/check-response-sizes.cjs`.
 - Optional secret `PROFILE_BUDGET_BEARER` enables checking `/api/profile`; otherwise it’s skipped.
 - Local run:
@@ -326,6 +387,12 @@ Troubleshooting “Missing CSRF token”:
          - WATCH: p95 > 110% of target OR long burn rate ≥ 1x
          - OK: Below those thresholds
       - All data is ephemeral (in-memory); restart resets windows. For production adopt persistent metrics + tracing (OpenTelemetry, Prometheus TSDB, etc.).
+
+      #### Realtime Metrics
+      - Realtime counters surfaced under `realtime` key in metrics snapshot:
+         - `connections`, `disconnects`, `notificationsAck`, `notificationsGiveup`, `rateLimited`, `emitErrors`.
+      - These map to internal event counters (`event.realtime.*`) emitted by the Socket.IO layer.
+      - Use them to spot delivery issues or aggressive clients (rate limits) during development.
 
    - Every API response includes correlation and basic timing headers:
       - `X-Request-Id` — request correlation ID (propagates from proxies if present)
@@ -398,6 +465,148 @@ Client auto-refresh behavior:
 - Prisma logging:
    - Development: logs queries for debugging
    - Production: reduced to warn/error to lower noise and overhead
+
+### Server-side Versioned Cache Layer
+
+Implemented for the jobs list endpoint with optional Redis backend (`REDIS_URL`) and in-memory fallback.
+
+Key pieces (`src/lib/cache.ts`):
+- `cacheJSON(namespace, logicalKey, { versionNs, ttlSeconds, build })` – wraps a builder fn, stores JSON, attaches `versionNs` stamp.
+- `bumpVersion(versionNs)` – O(1) coarse invalidation; increments monotonic counter appended to keys, invalidating all entries sharing that version namespace (e.g. `jobs_list`).
+- `invalidatePatternStartsWith(ns, prefix)` – targeted prefix invalidation (currently no-op for Redis variant; future enhancement if needed).
+- `getVersion(versionNs)` – inspect current version for debugging / metrics.
+
+Jobs List Usage (`GET /api/jobs`):
+- Public (no auth OR base scope only) + basic filters + non-draft requests become cache-eligible.
+- Composite logical key built from normalized filter payload (page, pageSize, sorted/filtered fields) and hashed/base64 to keep keys short.
+- After a successful job creation (`POST /api/jobs`) we call `bumpVersion('jobs_list')` – instantly invalidates ALL list variants without scanning.
+- Response adds `X-Cache: HIT|MISS` header for observability.
+
+ETag Coherence Strategy:
+- Cached payload still served through the existing JSON helper that sets a strong ETag (hash of serialized body).
+- Client revalidation with `If-None-Match` works seamlessly: a version bump triggers rebuild (new body → new ETag) while unchanged version returns identical payload/ETag enabling fast 304.
+- Coarse invalidation trades some potential over-invalidation for deterministic O(1) performance and avoids thundering herd risks of fine-grained key explosion.
+
+Operational Notes:
+- If Redis unavailable, system degrades gracefully to memory (process-local). Horizontal scaling should use Redis to avoid divergent caches.
+- Future metrics: expose cache hit/miss counters & version map size on `/api/admin/metrics` (placeholder for now).
+- Next candidates: freelancers list, frequently accessed profile summaries.
+
+Tuning Guidance:
+- Watch block ratio (below) before adjusting rate limits; high block ratio + low cache hit rate may point to upstream inefficiency rather than abusive clients.
+- Consider shorter TTL with higher version bump frequency if write volume increases (current strategy already instant for writes that matter).
+
+### Rate Limiting Visibility
+
+Per-user token bucket limiter now emits structured metric events:
+- `event.ratelimit.allow` – request consumed a token.
+- `event.ratelimit.block` – limiter denied request (should map to 429 or dropped websocket event).
+
+Metrics Dashboard (`/admin/metrics`):
+- New Rate Limiting section shows cumulative counters.
+- Derive block ratio = `block / (allow + block)` to tune thresholds (aim <1–2% under normal traffic; sustained >5% suggests raising burst or steady rate).
+
+Adjustment Playbook:
+1. If short spikes only: increase bucket capacity (burst) first.
+2. If sustained blocks: consider raising steady refill rate OR introducing per-endpoint differentiation.
+3. If abusive single client: add IP / address quarantine (future enhancement) rather than globally relaxing limits.
+
+Planned Enhancements:
+- Add rolling window block rate (% over last 5m & 60m) to SLO panel.
+- Persist counters to external store (Prometheus / OTEL) for retention beyond process lifetime.
+
+### Future / Backlog (Performance & Caching)
+- Fine-grained selective key segmentation (by skill filters) if cache churn grows.
+- Cache warming job (pre-fill hottest filter combos) after deployment.
+- CDN image optimization + Next/Image domain config (tracked in roadmap Phase 6).
+
+### CDN & Image Optimization
+
+Current configuration (`next.config.ts`):
+- `images.formats`: AVIF + WebP (smaller modern formats where supported).
+- Responsive breakpoints tuned for typical mobile → desktop widths (`deviceSizes`).
+- Fingerprinted build artifacts (`/_next/static/*`) served with `Cache-Control: public, max-age=31536000, immutable`.
+- Public folder assets: `max-age=86400, stale-while-revalidate=604800` (1d fresh, 7d soft).
+- Manual image route placeholder (`/images/*`): `max-age=7d, stale-while-revalidate=30d`.
+
+Deployment Recommendations:
+1. Put a CDN (Vercel Edge, Cloudflare, Fastly, etc.) in front—respect existing immutable/static headers.
+2. Enable HTTP/3 + brotli + (optionally) bfcache friendly policies.
+3. Use origin shield (if provider supports) to collapse regional cache misses for large images.
+4. Avoid widening remotePatterns too broadly in production; explicitly enumerate trusted hosts.
+5. For user-uploaded assets behind signatures, serve via short TTL (e.g. 5m) + signed URLs and rely on client caching (ETag/Last-Modified) instead of long CDN TTL.
+
+Observability Tie-in:
+- Consider adding counters for image optimizer hits/misses if throughput becomes significant (wrap custom loader or patch a middleware).
+- Monitor 95th percentile image transfer size in future budgets.
+
+
+## �️ Operations Runbooks
+Operational procedures are documented:
+- Migrations & rollback: `OPERATIONS_MIGRATIONS_RUNBOOK.md`
+- Environment parity matrix: `OPERATIONS_ENV_PARITY.md`
+- Backups & retention: `OPERATIONS_BACKUPS_RUNBOOK.md`
+- Secrets rotation: `OPERATIONS_SECRETS_ROTATION.md`
+
+Quick scripts:
+```
+npm run db:dry-run   # show SQL diff (no apply)
+npm run db:deploy    # apply pending migrations
+npm run db:backup    # create logical dump + retention prune
+```
+
+## �🔄 Real-time Architecture
+
+The platform uses a hardened Socket.IO layer for user-targeted notifications (applications, milestones, payments, disputes, messages) with reliability & safety primitives:
+
+### Connection & Auth
+- Client connects to `/api/socket` with optional auth token (`auth.token` supplied from `localStorage` access token in dev; replace with secure storage in production).
+- Middleware validates JWT (if present) and decorates `socket.userId` / `socket.roles`—unauthenticated connections are allowed but rate limited.
+
+### Rooms
+- Each user address joins a deterministic room `user:<address>` via `join-user-room` event after connection.
+- Server emits notifications directly to these rooms.
+
+### Rate Limiting
+- Per-user sliding window (10s) allows up to 30 emission events (non-ack/ping). Exceeding clients receive `rate_limited { retryAfterMs }` event; events are dropped server side.
+- Client also applies a soft guard: max 25 incoming notifications per 5s window (dropped with automatic ACK to suppress retries) to mitigate flooding.
+
+### Presence & Heartbeats
+- Client sends `presence:ping` every 25s; server tracks last ping per address.
+- Presence queries (`presence:who`) return a map `{ address: boolean }` marking active if last ping < 60s.
+- Presence is in-memory only; restart resets state.
+
+### Notification Delivery Reliability
+- Each outgoing notification receives a server-generated ID and is tracked in a retry registry until ACKed.
+- Client emits `notification:ack` upon receipt; server then removes pending entry.
+- Exponential backoff retries (1.5s * 2^n) up to 5 attempts; after give-up the counter `event.realtime.notification.giveup` increments.
+
+### Reconnection Policy (Client)
+- Exponential backoff up to 30s with jitter on `connect_error`.
+- Heartbeat interval cleared on disconnect and re-established after reconnect.
+
+### Metrics Hooks
+- Connection lifecycle: `event.realtime.connection`, `event.realtime.disconnect`.
+- Notification lifecycle: `event.realtime.notification.ack`, `event.realtime.notification.giveup`.
+- Flow control & errors: `event.realtime.rate_limited`, `event.realtime.emit.error`.
+- Aggregated snapshot exposes summarized `realtime` object in `/api/admin/metrics` JSON.
+
+### Client Provider Changes
+- `NotificationProvider` adds: heartbeat pings, server notification ACKs, reconnection backoff, soft rate limiting, ID preservation (`id` may be server-provided).
+
+### Future Hardening Ideas
+- Persist undelivered notifications (Redis / DB) for delivery after restart.
+- Replace custom retry logic with a queue (BullMQ) + durability.
+- Add fine-grained scopes limiting which event types a role can emit.
+- Presence graph or last-seen timestamps persisted for richer user status.
+
+## 🗺️ Roadmap Realtime Items (Status)
+- Socket layer selection & production hardening: ✅ (Socket.IO retained; auth, rate limits, retry, presence added)
+- Auth model & per-connection rate limits: ✅
+- Notification retry & backoff with ACK semantics: ✅
+- Presence heartbeat strategy: ✅ (ping + expiry window)
+
+See `PROJECT_ROADMAP.md` for broader milestones.
 
 To apply DB changes:
 ```powershell

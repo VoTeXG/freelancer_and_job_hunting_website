@@ -11,6 +11,7 @@ import { useReputation } from '@/hooks/useReputation';
 import { useCertificates } from '@/hooks/useCertificates';
 import { getFromIPFS, getIPFSGatewayUrl } from '@/lib/ipfs';
 import { LazyIcon } from '@/components/ui/LazyIcon';
+import Reveal from '@/components/Reveal';
 
 interface Job {
   id: string;
@@ -242,7 +243,8 @@ export default function JobDetailEnhanced() {
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Job Header */}
-          <Card>
+          <Reveal>
+          <Card hoverable glass>
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
@@ -278,10 +280,12 @@ export default function JobDetailEnhanced() {
               </div>
             </CardContent>
           </Card>
+          </Reveal>
 
           {/* Blockchain Information */}
           {job.useBlockchain && escrowInfo && (
-            <Card className="border-green-200 bg-green-50">
+            <Reveal delay={80}>
+            <Card className="border-green-200 bg-green-50" hoverable>
               <CardHeader>
                 <CardTitle className="flex items-center text-green-800">
                   <LazyIcon name="ShieldCheckIcon" className="h-6 w-6 mr-2" />
@@ -341,11 +345,13 @@ export default function JobDetailEnhanced() {
                 )}
               </CardContent>
             </Card>
+            </Reveal>
           )}
 
           {/* Project Milestones (from database) */}
           {job.milestones && job.milestones.length > 0 && (
-            <Card>
+            <Reveal delay={120}>
+            <Card hoverable glass>
               <CardHeader>
                 <CardTitle>Project Milestones</CardTitle>
               </CardHeader>
@@ -375,11 +381,13 @@ export default function JobDetailEnhanced() {
                 </div>
               </CardContent>
             </Card>
+            </Reveal>
           )}
 
           {/* IPFS Attachments */}
           {ipfsMetadata?.attachments && ipfsMetadata.attachments.length > 0 && (
-            <Card>
+            <Reveal delay={160}>
+            <Card hoverable glass>
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <LazyIcon name="DocumentIcon" className="h-6 w-6 mr-2" />
@@ -406,10 +414,12 @@ export default function JobDetailEnhanced() {
                 </div>
               </CardContent>
             </Card>
+            </Reveal>
           )}
 
           {/* Skills and Requirements */}
-          <Card>
+          <Reveal delay={200}>
+          <Card hoverable glass>
             <CardHeader>
               <CardTitle>Skills & Requirements</CardTitle>
             </CardHeader>
@@ -440,12 +450,14 @@ export default function JobDetailEnhanced() {
               )}
             </CardContent>
           </Card>
+          </Reveal>
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Apply Button */}
-          <Card>
+          <Reveal>
+          <Card hoverable glass>
             <CardContent className="p-6">
               <Button
                 onClick={handleApplyJob}
@@ -462,9 +474,11 @@ export default function JobDetailEnhanced() {
               )}
             </CardContent>
           </Card>
+          </Reveal>
 
           {/* Client Information */}
-          <Card>
+          <Reveal delay={80}>
+          <Card hoverable glass>
             <CardHeader>
               <CardTitle className="flex items-center">
                 <LazyIcon name="UserIcon" className="h-6 w-6 mr-2" />
@@ -538,9 +552,11 @@ export default function JobDetailEnhanced() {
               )}
             </CardContent>
           </Card>
+          </Reveal>
 
           {/* Job Stats */}
-          <Card>
+          <Reveal delay={120}>
+          <Card hoverable glass>
             <CardHeader>
               <CardTitle>Job Statistics</CardTitle>
             </CardHeader>
@@ -569,6 +585,7 @@ export default function JobDetailEnhanced() {
               </div>
             </CardContent>
           </Card>
+          </Reveal>
         </div>
       </div>
     </div>

@@ -20,13 +20,20 @@
   "include": [
     "next-env.d.ts",
     "src/**/*.ts",
-    "src/**/*.tsx"
+    "src/**/*.tsx",
+    "src/**/*.d.ts"
   ],
   "exclude": [
     "node_modules",
     "e2e",
     "playwright.config.ts",
     "**/*.spec.ts",
+    "test",
+    "test/**",
+    "sentry.client.config.ts",
+    "sentry.server.config.ts",
+    "scripts/axe-scan.ts",
+    ".github/workflows/**",
     ".next/**"
   
   ]

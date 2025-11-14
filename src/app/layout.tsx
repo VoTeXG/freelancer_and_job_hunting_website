@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import '@rainbow-me/rainbowkit/styles.css';
+import 'quill/dist/quill.snow.css';
 import ClientProviders from './ClientProviders';
+import PageTransition from '@/components/PageTransition';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BlockFreelancer - Blockchain Freelance Platform",
-  description: "Decentralized freelance platform with blockchain technology for secure payments and reputation management",
+  title: "CareerBridge – Web3 Freelance Platform",
+  description: "Bridge to your success: secure escrow, on-chain reputation, and global talent backed by blockchain.",
 };
 
 export default function RootLayout({
@@ -27,10 +29,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50`}
+        suppressHydrationWarning
+        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-svh text-[var(--text-primary)]`}
       >
         <ClientProviders>
-          {children}
+          {/* Landmark roles */}
+          <div role="main" id="main-content">
+            <PageTransition>
+              {children}
+            </PageTransition>
+          </div>
         </ClientProviders>
       </body>
     </html>

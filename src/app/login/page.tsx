@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { useAuth } from '@/providers/AuthProvider';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login: setAuthToken, refresh } = useAuth();
   const [emailOrUsername, setEmailOrUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -52,9 +54,18 @@ export default function LoginPage() {
       if (!res.ok || !data.success) {
         setError(data.error || 'Login failed');
       } else {
+        // Persist token and update global auth state immediately
         try { if (data.token) localStorage.setItem('auth_token', data.token); } catch {}
+        if (data.token) {
+          setAuthToken(data.token);
+        } else {
+          // Fallback: try to refresh profile if token is cookie-based
+          refresh().catch(() => {});
+        }
         setSuccess(true);
-        setTimeout(() => router.push('/dashboard'), 600);
+        // Force a profile refresh so Navigation picks up user immediately
+        try { await refresh(); } catch {}
+        setTimeout(() => router.push('/dashboard/enhanced'), 300);
       }
     } catch (err) {
       setError('Network error');
@@ -72,8 +83,9 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email or Username</label>
+              <label htmlFor="login-identifier" className="block text-sm font-medium text-gray-700 mb-1">Email or Username</label>
               <input
+                id="login-identifier"
                 type="text"
                 autoComplete="username"
                 required
@@ -84,8 +96,9 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
               <input
+                id="login-password"
                 type="password"
                 autoComplete="current-password"
                 required
@@ -106,7 +119,7 @@ export default function LoginPage() {
             </Button>
             <div className="text-center text-xs text-gray-500">
               <span className="block mb-2">Or continue with your wallet (optional) from the navigation after signing in.</span>
-              <span className="block">Need an account? <a href="/register" className="text-purple-600 hover:underline font-medium">Register</a></span>
+              <span className="block">Need an account? <a href="/register" className="text-purple-600 underline font-medium">Register</a></span>
             </div>
           </form>
         </CardContent>

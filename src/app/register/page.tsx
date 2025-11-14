@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { useAuth } from '@/providers/AuthProvider';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { login: setAuthToken, refresh } = useAuth();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -14,15 +16,26 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  const ensureCsrf = async () => {
+    const has = typeof document !== 'undefined' && document.cookie.split('; ').some(c => c.startsWith('csrf_token='));
+    if (!has) {
+      await fetch('/api/auth/nonce', { credentials: 'include' }).catch(() => {});
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(false);
     setLoading(true);
     try {
+      await ensureCsrf();
+      // Attach CSRF double-submit token if present
+      const csrfCookie = typeof document !== 'undefined' ? document.cookie.split('; ').find(c=>c.startsWith('csrf_token=')) : null;
+      const csrf = csrfCookie ? decodeURIComponent(csrfCookie.split('=')[1]) : undefined;
       const res = await fetch('/api/auth/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(csrf ? { 'X-CSRF-Token': csrf } : {}) },
         body: JSON.stringify({ email, username, password }),
       });
       const data = await res.json();
@@ -30,11 +43,23 @@ export default function RegisterPage() {
         setError(data.error || 'Registration failed');
       } else {
         try { if (data.token) localStorage.setItem('auth_token', data.token); } catch {}
+        if (data.token) {
+          setAuthToken(data.token);
+        } else {
+          // Fallback: try to refresh profile if token is cookie-based
+          refresh().catch(() => {});
+        }
         setSuccess(true);
-        setTimeout(() => router.push('/dashboard'), 600);
+        try { await refresh(); } catch {}
+        setTimeout(() => router.push('/dashboard/enhanced'), 300);
       }
-    } catch (e) {
-      setError('Network error');
+    } catch (e: any) {
+      // Provide more granular error hinting for debugging connectivity vs server failures
+      if (e?.name === 'TypeError') {
+        setError('Network error (failed to reach server)');
+      } else {
+        setError('Unexpected error submitting registration');
+      }
     } finally {
       setLoading(false);
     }
@@ -49,8 +74,9 @@ export default function RegisterPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label htmlFor="reg-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
+                id="reg-email"
                 type="email"
                 required
                 value={email}
@@ -61,8 +87,9 @@ export default function RegisterPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+              <label htmlFor="reg-username" className="block text-sm font-medium text-gray-700 mb-1">Username</label>
               <input
+                id="reg-username"
                 type="text"
                 required
                 value={username}
@@ -73,8 +100,9 @@ export default function RegisterPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <label htmlFor="reg-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
               <input
+                id="reg-password"
                 type="password"
                 required
                 value={password}
@@ -90,7 +118,7 @@ export default function RegisterPage() {
               {loading ? 'Creating…' : 'Create Account'}
             </Button>
             <div className="text-center text-xs text-gray-500">
-              <span className="block">Already have an account? <a href="/login" className="text-purple-600 hover:underline">Sign in</a></span>
+              <span className="block">Already have an account? <a href="/login" className="text-purple-600 underline font-medium">Sign in</a></span>
             </div>
           </form>
         </CardContent>

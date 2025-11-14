@@ -40,7 +40,7 @@ export default function FreelancerCard({ freelancer }: FreelancerCardProps) {
   };
 
   return (
-    <Card className="h-full hover:shadow-lg transition-shadow duration-200">
+    <Card interactive className="h-full" data-testid="freelancer-card">
       <CardContent className="p-6">
         {/* Header with profile image and basic info */}
         <div className="flex items-start space-x-4 mb-4">
@@ -120,8 +120,8 @@ export default function FreelancerCard({ freelancer }: FreelancerCardProps) {
       </CardContent>
 
       <CardFooter className="p-6 pt-0 space-x-2">
-        <Button variant="outline" size="sm" className="flex-1">
-          <Link href={`/freelancers/${id}`} className="w-full">
+        <Button variant="outline" size="sm" className="flex-1 border-gray-200 hover:border-purple-300 hover:text-purple-700" asChild>
+          <Link href={`/freelancers/${id}`} aria-label={`View profile for ${username}`} className="w-full">
             View Profile
           </Link>
         </Button>

@@ -12,8 +12,8 @@ export async function OPTIONS() { return preflightResponse(); }
 export async function GET(req: NextRequest) {
   try {
     const auth = req.headers.get('authorization');
-    if (!auth?.startsWith('Bearer ')) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-  const token = auth.split(' ')[1];
+    const token = req.cookies.get('session_token')?.value || (auth?.startsWith('Bearer ') ? auth.split(' ')[1] : undefined);
+    if (!token) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   const access = verifyAccessToken(token);
   if (!access) return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 });
   if (!access.scope?.includes('write:jobs')) return NextResponse.json({ success: false, error: 'Forbidden: missing scope write:jobs' }, { status: 403 });
@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
     if (!rl.allowed) return NextResponse.json({ success: false, error: 'Rate limit exceeded' }, { status: 429 });
 
     const auth = req.headers.get('authorization');
-    if (!auth?.startsWith('Bearer ')) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    const token = auth.split(' ')[1];
+    const token = req.cookies.get('session_token')?.value || (auth?.startsWith('Bearer ') ? auth.split(' ')[1] : undefined);
+    if (!token) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   const access = verifyAccessToken(token);
   if (!access) return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 });
   if (!access.scope?.includes('write:jobs')) return NextResponse.json({ success: false, error: 'Forbidden: missing scope write:jobs' }, { status: 403 });

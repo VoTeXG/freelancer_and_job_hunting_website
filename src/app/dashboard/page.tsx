@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LazyIcon } from '@/components/ui/LazyIcon';
+import { useApiErrorHandlers } from '@/lib/queryClient';
+import Reveal from '@/components/Reveal';
 
 interface Application {
   _id: string;
@@ -45,6 +47,8 @@ export default function ClientDashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [inFlightApps, setInFlightApps] = useState<Set<string>>(new Set());
+  const { toastSuccess, toastError } = useApiErrorHandlers();
 
   useEffect(() => {
     fetchClientJobs();
@@ -75,6 +79,7 @@ export default function ClientDashboard() {
 
   const handleApplicationAction = async (jobId: string, applicationId: string, action: 'accept' | 'reject') => {
     try {
+      setInFlightApps(prev => new Set(prev).add(applicationId + ':' + action));
       const response = await fetch(`/api/jobs/${jobId}/applications/${applicationId}`, {
         method: 'PATCH',
         headers: {
@@ -114,9 +119,21 @@ export default function ClientDashboard() {
             )
           } : null);
         }
+
+        toastSuccess(
+          action === 'accept' ? 'Application accepted' : 'Application rejected',
+          action === 'accept' ? 'Accepted' : 'Rejected'
+        );
       }
     } catch (error) {
       console.error('Failed to update application:', error);
+      toastError('Failed to update application');
+    } finally {
+      setInFlightApps(prev => {
+        const next = new Set(prev);
+        next.delete(applicationId + ':' + action);
+        return next;
+      });
     }
   };
 
@@ -140,11 +157,11 @@ export default function ClientDashboard() {
   if (isLoading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+        <div className="space-y-6">
+          <div className="h-8 bg-gray-200 rounded w-1/4 skeleton-shimmer"></div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="h-96 bg-gray-200 rounded"></div>
-            <div className="lg:col-span-2 h-96 bg-gray-200 rounded"></div>
+            <div className="h-96 bg-gray-200 rounded skeleton-shimmer"></div>
+            <div className="lg:col-span-2 h-96 bg-gray-200 rounded skeleton-shimmer"></div>
           </div>
         </div>
       </div>
@@ -153,14 +170,14 @@ export default function ClientDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
+      <div className="mb-8 animate-fade-up">
         <h1 className="text-3xl font-bold text-gray-900">Your Job Posts</h1>
         <p className="text-gray-600 mt-2">Manage your job postings and review applications</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Jobs List */}
-        <div className="space-y-4">
+        <div className="space-y-4 animate-fade-up">
           <h2 className="text-lg font-semibold text-gray-900">Posted Jobs ({jobs.length})</h2>
           
           {jobs.length === 0 ? (
@@ -170,41 +187,41 @@ export default function ClientDashboard() {
               </CardContent>
             </Card>
           ) : (
-            jobs.map((job) => (
-              <Card 
-                key={job._id}
-                className={`cursor-pointer transition-all hover:shadow-md ${
-                  selectedJob?._id === job._id ? 'ring-2 ring-blue-500' : ''
-                }`}
-                onClick={() => setSelectedJob(job)}
-              >
-                <CardContent className="p-4">
-                  <h3 className="font-medium text-gray-900 mb-2 line-clamp-2">{job.title}</h3>
-                  <div className="space-y-2 text-sm text-gray-600">
-                    <div className="flex items-center justify-between">
-                      <span>{job.applicants.length} applications</span>
-                      <span className="capitalize">{job.status}</span>
+            jobs.map((job, idx) => (
+              <Reveal key={job._id} delay={Math.min(400, idx * 60)}>
+                <Card 
+                  interactive
+                  className={`cursor-pointer ${selectedJob?._id === job._id ? 'ring-2 ring-blue-500' : ''}`}
+                  onClick={() => setSelectedJob(job)}
+                >
+                  <CardContent className="p-4">
+                    <h3 className="font-medium text-gray-900 mb-2 line-clamp-2">{job.title}</h3>
+                    <div className="space-y-2 text-sm text-gray-600">
+                      <div className="flex items-center justify-between">
+                        <span>{job.applicants.length} applications</span>
+                        <span className="capitalize">{job.status}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <LazyIcon name="CurrencyDollarIcon" className="h-4 w-4" />
+                        <span>${job.budget.amount.toLocaleString()}</span>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Posted {formatDate(job.createdAt)}
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <LazyIcon name="CurrencyDollarIcon" className="h-4 w-4" />
-                      <span>${job.budget.amount.toLocaleString()}</span>
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      Posted {formatDate(job.createdAt)}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </Reveal>
             ))
           )}
         </div>
 
         {/* Applications Detail */}
-        <div className="lg:col-span-2">
+  <div className="lg:col-span-2 animate-fade-up">
           {selectedJob ? (
             <div className="space-y-6">
               {/* Job Header */}
-              <Card>
+              <Card className="animate-fade-up">
                 <CardHeader>
                   <CardTitle>{selectedJob.title}</CardTitle>
                 </CardHeader>
@@ -235,8 +252,9 @@ export default function ClientDashboard() {
                   </Card>
                 ) : (
                   <div className="space-y-4">
-                    {selectedJob.applicants.map((application) => (
-                      <Card key={application._id}>
+                    {selectedJob.applicants.map((application, idx) => (
+                      <Reveal key={application._id} delay={Math.min(400, idx * 60)}>
+                        <Card>
                         <CardContent className="p-6">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-start space-x-3">
@@ -340,6 +358,8 @@ export default function ClientDashboard() {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleApplicationAction(selectedJob._id, application._id, 'reject')}
+                                loading={inFlightApps.has(application._id + ':' + 'reject')}
+                                loadingText="Declining..."
                                 className="flex items-center space-x-1"
                               >
                                 <LazyIcon name="XMarkIcon" className="h-4 w-4" />
@@ -348,6 +368,8 @@ export default function ClientDashboard() {
                               <Button
                                 size="sm"
                                 onClick={() => handleApplicationAction(selectedJob._id, application._id, 'accept')}
+                                loading={inFlightApps.has(application._id + ':' + 'accept')}
+                                loadingText="Accepting..."
                                 className="flex items-center space-x-1"
                               >
                                 <LazyIcon name="CheckIcon" className="h-4 w-4" />
@@ -355,8 +377,9 @@ export default function ClientDashboard() {
                               </Button>
                             </div>
                           )}
-                        </CardContent>
-                      </Card>
+                          </CardContent>
+                        </Card>
+                      </Reveal>
                     ))}
                   </div>
                 )}

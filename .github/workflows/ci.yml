@@ -60,6 +60,9 @@ jobs:
       - name: Playwright install
         run: npx playwright install --with-deps
 
+      - name: Accessibility scan (axe) — informational
+        run: npm run a11y:axe
+
       - name: E2E tests
         run: npx playwright test --reporter=line
 

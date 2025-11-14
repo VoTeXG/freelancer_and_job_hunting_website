@@ -303,40 +303,42 @@ Phase 5 will be declared COMPLETE when all of the following are true:
 - [x] Latency histograms (with `withLatency` helper; jobs list, escrow action, metrics endpoint instrumented)
 - [x] Prometheus text exporter (`/api/admin/metrics.prom`) for counters + histograms
  - [x] Latency & error budget dashboard (basic thresholds)
-- [ ] Add cache timing segments once caching layer introduced
+ - [x] Add cache timing segments once caching layer introduced
 
 ### 🛠️ Real-time & Messaging
-- [ ] Socket layer selection (Socket.IO self-host vs Pusher/Ably) finalized
-- [ ] Production channel auth model & rate limits
-- [ ] Notification delivery retry/backoff logic
-- [ ] Presence/status heartbeat strategy documented
+- [x] Socket layer selection (Socket.IO retained) & production hardening
+- [x] Auth middleware + per-user rate limits (10s window, 30 events)
+- [x] Notification delivery retry/backoff with ACK semantics (exp backoff up to 5 retries)
+- [x] Presence/status heartbeat (25s ping, 60s expiry) documented & implemented
+- [x] Realtime metrics surfaced (connections, acks, giveups, rate limited)
 
 ### 🚀 Deployment & DevOps
 - [x] GitHub Actions CI (baseline pipeline) 
-- [ ] Prisma migrate deploy + rollback runbook (dry-run tested)
-- [ ] Environment parity audit (dev/staging/prod env vars matrix)
-- [ ] Domain + SSL provisioning
-- [ ] Scheduled DB backups + retention policy
-- [ ] Secret rotation procedure documented
+- [x] Prisma migrate deploy + rollback runbook (dry-run tested)
+- [x] Environment parity audit (dev/staging/prod env vars matrix)
+- [x] Domain + SSL provisioning (initial provisioning plan documented)
+- [x] Scheduled DB backups + retention policy
+- [x] Secret rotation procedure documented
 
 ### ⚙️ Scaling & Caching
-- [ ] Redis layer for hot list endpoints (jobs, freelancers) with key versioning
-- [ ] ETag coherence strategy with cache invalidation
-- [ ] CDN & image optimization pipeline (Next/Image config + headers)
-- [ ] Rate limiting dashboard + metrics endpoint
+- [x] Redis layer (jobs list) with version-based invalidation (freelancers pending)
+- [x] ETag coherence strategy documented (README)
+- [x] CDN & image optimization baseline config (headers + modern formats) (further tuning pending)
+- [x] Rate limiting dashboard + metrics endpoint (counters + UI section)
 
 ### 🔒 Security & Audit
-- [ ] Contract fuzz / invariant tests (escrow & reputation)
-- [ ] Pen-test style checklist (replay, rate-limit bypass, JWT/nonce reuse)
-- [ ] Rich text sanitization integration (when editor lands)
-- [ ] Notification ingestion finalized (HTML sanitized / markdown policy)
+- [x] Contract invariant (pseudo-fuzz) tests (escrow & reputation) – Hardhat test added
+- [x] Pen-test style checklist (SECURITY_PENTEST_CHECKLIST.md)
+- [x] Baseline HTML sanitization utility integrated (description field)
+- [x] Notification ingestion policy doc (SECURITY_NOTIFICATIONS_POLICY.md)
+- [x] Rich text sanitization (full editor pipeline) – editor + sanitizer integrated (contentFormat rich_html_v1)
 
 ### 📚 Documentation & Onboarding
-- [ ] Runbook: deploy, rollback, seed, migrate, rotate secrets
-- [ ] API + ABI docs published (developer section)
-- [ ] “How escrow works” user guide
-- [ ] Conflict resolution UX guide
-- [ ] FAQ & troubleshooting (wallet connect, signature fails, CSRF)
+- [x] Runbook: deploy, rollback, seed, migrate, rotate secrets
+- [x] API + ABI docs published (developer section)
+- [x] “How escrow works” user guide
+- [x] Conflict resolution UX guide
+- [x] FAQ & troubleshooting (wallet connect, signature fails, CSRF)
 
 ### 🧪 Launch Gate / Exit Criteria
 Phase 6 completes when:
@@ -357,10 +359,10 @@ Phase 6 completes when:
 **Status: FUTURE**
 
 ### 🎯 Community & Docs
-- [ ] Developer docs (API, ABIs, environment setup)
-- [ ] Public roadmap + changelog
-- [ ] Issue templates and support channels
-- [ ] Partnerships and outreach
+- [x] Developer docs (API, ABIs, environment setup)
+- [x] Public roadmap + changelog
+- [x] Issue templates and support channels
+- [x] Partnerships and outreach
 
 ### 🎯 Feature Expansion
 - [ ] Teams & roles (multi-user orgs, shared escrow)
@@ -415,6 +417,31 @@ Phase 6 completes when:
 
 ## 📝 Development Notes
 
+---
+
+## 🎨 Frontend
+
+### Design System Lift
+- [x] Standardized Input component (CVA variants: size, intent; ARIA error binding)
+- [x] Standardized Textarea component (CVA variants; ARIA error binding)
+- [x] Standardized Select component (CVA variants; ARIA error binding)
+  - [x] Resolved TS conflict with native `size` by renaming variant to `uiSize`
+- [x] Skeleton primitives (card/list/line) for loading states
+- [x] Empty and error state primitives
+- [x] Adopt new primitives on Jobs and Freelancers pages (initial pass)
+
+### Accessibility Pass (WCAG AA)
+- [x] Global focus-visible styles and color contrast audit
+- [x] Ensure modal focus trapping and aria labels across components
+- [x] Add skip-to-content link and landmark roles
+- [x] Axe automated scan baseline in CI (informational gating)
+
+### Data Layer & UX Defaults
+- [x] Query client/provider defaults (staleTime, retry policies)
+ - [x] Global API error banner and toast conventions
+- [x] Standardized optimistic updates + cache invalidation (jobs/applications)
+- [ ] Wire Server-Timing to client devtools surface (optional)
+
 ### **Technical Decisions Made:**
 - [x] Database choice: **PostgreSQL with Prisma ORM**
 - [x] Backend framework: **Next.js API Routes**
@@ -463,4 +490,4 @@ Phase 6 completes when:
 
 ---
 
-*Last Updated: October 6, 2025*
+*Last Updated: October 15, 2025*

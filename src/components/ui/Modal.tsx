@@ -79,9 +79,11 @@ export default function Modal({
                 ref={panelRef}
                 aria-modal="true"
                 role="dialog"
+                aria-labelledby="modal-title"
                 className={`w-full ${sizeClasses[size]} transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all focus:outline-none`}
               >
                 <Dialog.Title
+                  id="modal-title"
                   as="h3"
                   className="flex items-center justify-between text-lg font-medium leading-6 text-gray-900 mb-4"
                 >

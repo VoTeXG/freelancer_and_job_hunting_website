@@ -47,6 +47,7 @@ const LONG_WINDOW_MINUTES = 60;
 // SLO targets (p95 latency in ms) per endpoint
 const LATENCY_SLO_TARGETS: Record<string, number> = {
   'api.jobs.list': 400,
+  'api.freelancers.list': 400,
   'api.escrow.action': 600,
   'api.admin.metrics.json': 250,
 };
@@ -298,6 +299,14 @@ export function getMetricsSnapshot() {
         remainingBudget: AVAILABILITY_ERROR_RATE_TARGET - longErrorRate,
         status: availabilityStatus,
       }
+    },
+    realtime: {
+      connections: counters['event.realtime.connection'] || 0,
+      disconnects: counters['event.realtime.disconnect'] || 0,
+      notificationsAck: counters['event.realtime.notification.ack'] || 0,
+      notificationsGiveup: counters['event.realtime.notification.giveup'] || 0,
+      rateLimited: counters['event.realtime.rate_limited'] || 0,
+      emitErrors: counters['event.realtime.emit.error'] || 0,
     }
   };
 }

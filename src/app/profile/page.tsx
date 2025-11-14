@@ -12,10 +12,14 @@ const ProfileEditModal = dynamic(
 );
 import PageContainer from '@/components/PageContainer';
 import { LazyIcon } from '@/components/ui/LazyIcon';
+import { useApiErrorHandlers } from '@/lib/queryClient';
+import AnimatedCounter from '@/components/AnimatedCounter';
+import Reveal from '@/components/Reveal';
 
 export default function ProfilePage() {
   const { wallet } = useWallet();
   const [isEditing, setIsEditing] = useState(false);
+  const { toastSuccess, toastError, bannerError } = useApiErrorHandlers();
   
   // Mock token for now - in real app, this would come from authentication
   const mockToken = 'mock-jwt-token';
@@ -43,10 +47,10 @@ export default function ProfilePage() {
   const handleSaveProfile = async (profileData: any) => {
     try {
       await updateProfile(profileData);
-      // Profile will be automatically updated via the hook
-    } catch (error) {
-      console.error('Failed to save profile:', error);
-      // You can add toast notification here
+      toastSuccess('Your profile has been updated.', 'Profile updated');
+    } catch (error: any) {
+      const msg = error?.message || 'Failed to save profile';
+      toastError(msg, 'Profile save failed');
     }
   };
 
@@ -114,6 +118,13 @@ export default function ProfilePage() {
 
   return (
     <PageContainer>
+      {/* Standardized Section Header */}
+      <div className="mb-6 animate-fade-up">
+        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+          <span className="bg-clip-text text-transparent bg-gradient-to-r from-[var(--brand-600)] to-blue-600">Your Profile</span>
+        </h1>
+        <p className="text-[var(--text-muted)] text-lg">Manage your identity, skills, and achievements</p>
+      </div>
       {/* Profile Edit Modal */}
       <ProfileEditModal
         isOpen={isEditing}
@@ -122,11 +133,12 @@ export default function ProfilePage() {
         onSave={handleSaveProfile}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-up">
         {/* Left Column - Profile Info */}
         <div className="lg:col-span-1 space-y-6">
           {/* Profile Card */}
-          <Card>
+          <Reveal>
+          <Card hoverable glass>
             <CardContent className="p-6 text-center">
               <div className="relative mb-4">
                 <div className="w-24 h-24 mx-auto rounded-full bg-gray-200 flex items-center justify-center">
@@ -135,13 +147,13 @@ export default function ProfilePage() {
                 <LazyIcon name="CheckBadgeIcon" variant="solid" className="absolute bottom-0 right-1/2 transform translate-x-6 h-6 w-6 text-blue-600" />
               </div>
               
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">{userData.username}</h1>
-              <p className="text-blue-600 font-medium mb-2">{userData.title}</p>
+              <h1 className="text-2xl font-bold text-gray-900 mb-1">{isLoading ? 'Loading…' : userData.username}</h1>
+              <p className="text-blue-600 font-medium mb-2">{isLoading ? '—' : userData.title}</p>
               
               <div className="flex items-center justify-center space-x-1 mb-4">
                 <LazyIcon name="StarIcon" variant="solid" className="h-5 w-5 text-yellow-400" />
-                <span className="font-medium">{userData.reputation}</span>
-                <span className="text-gray-500">({userData.completedJobs} jobs)</span>
+                <span className="font-medium">{isLoading ? '—' : userData.reputation}</span>
+                <span className="text-gray-500">({isLoading ? '—' : userData.completedJobs} jobs)</span>
               </div>
 
               <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium capitalize ${getAvailabilityColor(userData.availability)}`}>
@@ -149,16 +161,18 @@ export default function ProfilePage() {
               </span>
 
               <div className="mt-4 space-y-2">
-                <Button className="w-full" onClick={() => setIsEditing(!isEditing)}>
+                <Button className="w-full" onClick={() => setIsEditing(!isEditing)} loading={isLoading} loadingText="Loading">
                   <LazyIcon name="PencilIcon" className="h-4 w-4 mr-2" />
                   Edit Profile
                 </Button>
               </div>
             </CardContent>
           </Card>
+          </Reveal>
 
           {/* Wallet Info */}
-          <Card>
+          <Reveal delay={80}>
+          <Card hoverable glass>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <LazyIcon name="WalletIcon" className="h-5 w-5" />
@@ -186,9 +200,11 @@ export default function ProfilePage() {
               )}
             </CardContent>
           </Card>
+          </Reveal>
 
           {/* Skills */}
-          <Card>
+          <Reveal delay={120}>
+          <Card hoverable glass>
             <CardHeader>
               <CardTitle>Skills</CardTitle>
             </CardHeader>
@@ -205,9 +221,11 @@ export default function ProfilePage() {
               </div>
             </CardContent>
           </Card>
+          </Reveal>
 
           {/* NFT Certifications */}
-          <Card>
+          <Reveal delay={160}>
+          <Card hoverable glass>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <LazyIcon name="AcademicCapIcon" className="h-5 w-5" />
@@ -231,41 +249,45 @@ export default function ProfilePage() {
               </div>
             </CardContent>
           </Card>
+          </Reveal>
         </div>
 
         {/* Right Column - Work History & Details */}
         <div className="lg:col-span-2 space-y-6">
           {/* About */}
-          <Card>
+          <Reveal>
+          <Card hoverable glass>
             <CardHeader>
               <CardTitle>About</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-700 leading-relaxed">{userData.bio}</p>
+              <p className="text-gray-700 leading-relaxed">{isLoading ? 'Loading your profile…' : userData.bio}</p>
               
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">${userData.hourlyRate}</div>
+                  <div className="text-2xl font-bold text-blue-600">{isLoading ? '—' : <AnimatedCounter value={userData.hourlyRate} prefix="$" />}</div>
                   <div className="text-sm text-gray-500">Hourly Rate</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{userData.completedJobs}</div>
+                  <div className="text-2xl font-bold text-green-600">{isLoading ? '—' : <AnimatedCounter value={userData.completedJobs} />}</div>
                   <div className="text-sm text-gray-500">Jobs Completed</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">{userData.experience}Y</div>
+                  <div className="text-2xl font-bold text-purple-600">{isLoading ? '—' : <AnimatedCounter value={userData.experience} suffix="Y" />}</div>
                   <div className="text-sm text-gray-500">Experience</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">{userData.reputation}</div>
+                  <div className="text-2xl font-bold text-orange-600">{isLoading ? '—' : <AnimatedCounter value={Math.round(userData.reputation * 10)} suffix={''} />}</div>
                   <div className="text-sm text-gray-500">Rating</div>
                 </div>
               </div>
             </CardContent>
           </Card>
+          </Reveal>
 
           {/* Recent Work */}
-          <Card>
+          <Reveal delay={80}>
+          <Card hoverable glass>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <LazyIcon name="BriefcaseIcon" className="h-5 w-5" />
@@ -311,6 +333,7 @@ export default function ProfilePage() {
               </div>
             </CardContent>
           </Card>
+          </Reveal>
         </div>
       </div>
   </PageContainer>

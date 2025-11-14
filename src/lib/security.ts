@@ -2,21 +2,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 
 const CSRF_COOKIE = 'csrf_token';
+// Feature flag: allow temporarily disabling CSRF checks (development/demo only)
+// Set REQUIRE_CSRF=false in the environment to bypass verifyCsrf() on the server.
+export const REQUIRE_CSRF = process.env.REQUIRE_CSRF !== 'false';
 
-export function getAllowedOrigin(req?: NextRequest): string | null {
-  const envOrigin = process.env.NEXT_PUBLIC_APP_ORIGIN || '';
-  if (envOrigin) return envOrigin;
-  // Fallback: reflect same origin for server-side requests if available
-  const origin = req?.headers.get('origin');
-  return origin || null;
+// Support multiple allowed origins (comma-separated) for LAN/dev scenarios.
+// Accept NEXT_PUBLIC_APP_ORIGIN (single) or ALLOWED_ORIGINS (comma list).
+export function getAllowedOrigins(): string[] {
+  const single = process.env.NEXT_PUBLIC_APP_ORIGIN?.trim();
+  const list = process.env.ALLOWED_ORIGINS?.trim();
+  const origins: string[] = [];
+  if (single) origins.push(single);
+  if (list) {
+    for (const part of list.split(',')) {
+      const o = part.trim();
+      if (o && !origins.includes(o)) origins.push(o);
+    }
+  }
+  return origins;
 }
 
 export function isAllowedOrigin(req: NextRequest): boolean {
-  const allowed = getAllowedOrigin(req);
-  if (!allowed) return true; // if not configured, allow
+  const origins = getAllowedOrigins();
+  if (!origins.length) return true; // if not configured, allow
   const origin = req.headers.get('origin');
-  if (!origin) return true; // non-CORS same-origin
-  return origin === allowed;
+  if (!origin) return true; // same-origin (no CORS preflight)
+  return origins.includes(origin);
 }
 
 export function createCsrfToken(): string {
@@ -38,6 +49,7 @@ export function setCsrfCookie(res: NextResponse, token: string) {
 }
 
 export function verifyCsrf(req: NextRequest): { ok: boolean; reason?: string } {
+  if (!REQUIRE_CSRF) return { ok: true };
   const method = req.method.toUpperCase();
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return { ok: true };
 

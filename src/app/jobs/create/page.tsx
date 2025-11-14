@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import PageContainer from '@/components/PageContainer';
 import SectionHeader from '@/components/SectionHeader';
 import { LazyIcon } from '@/components/ui/LazyIcon';
+import { useApiErrorHandlers } from '@/lib/queryClient';
 
 const jobSchema = z.object({
   title: z.string().min(10, 'Title must be at least 10 characters long'),
@@ -28,6 +29,7 @@ type JobFormData = z.infer<typeof jobSchema>;
 export default function CreateJobPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toastSuccess, toastError, bannerError } = useApiErrorHandlers();
   const [skillInput, setSkillInput] = useState('');
   const [requirementInput, setRequirementInput] = useState('');
 
@@ -81,7 +83,7 @@ export default function CreateJobPage() {
       // Get the actual token from localStorage
       const token = localStorage.getItem('token');
       if (!token) {
-        alert('Please log in to post a job');
+        bannerError('Please log in to post a job');
         router.push('/');
         return;
       }
@@ -111,14 +113,14 @@ export default function CreateJobPage() {
       const result = await response.json();
 
       if (result.success) {
-        alert('Job posted successfully!');
+        toastSuccess('Your job has been posted.', 'Job posted');
         router.push('/dashboard');
       } else {
-        alert(result.error || 'Failed to post job');
+        toastError(result.error || 'Failed to post job', 'Job post failed');
       }
     } catch (error) {
       console.error('Failed to post job:', error);
-      alert('Failed to post job');
+      toastError('Failed to post job');
     } finally {
       setIsSubmitting(false);
     }

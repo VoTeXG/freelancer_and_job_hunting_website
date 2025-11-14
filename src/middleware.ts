@@ -41,16 +41,17 @@ export function middleware(req: NextRequest) {
     res.headers.set('Strict-Transport-Security', 'max-age=15552000; includeSubDomains; preload');
   }
 
-  // CORS: allow configured origin only (default allow-all for dev if not set)
-  const allowed = process.env.NEXT_PUBLIC_APP_ORIGIN || '*';
-  if (allowed === '*') {
+  // CORS: allow configured origins only (default allow-all for dev if not set)
+  const allowedList = (process.env.ALLOWED_ORIGINS || process.env.NEXT_PUBLIC_APP_ORIGIN || '*').trim();
+  const origins = allowedList === '*'
+    ? ['*']
+    : allowedList.split(',').map(o => o.trim()).filter(Boolean);
+  const origin = req.headers.get('origin');
+  if (origins.includes('*')) {
     res.headers.set('Access-Control-Allow-Origin', '*');
-  } else {
-    const origin = req.headers.get('origin');
-    if (origin && origin === allowed) {
-      res.headers.set('Access-Control-Allow-Origin', origin);
-      res.headers.set('Access-Control-Allow-Credentials', 'true');
-    }
+  } else if (origin && origins.includes(origin)) {
+    res.headers.set('Access-Control-Allow-Origin', origin);
+    res.headers.set('Access-Control-Allow-Credentials', 'true');
   }
   res.headers.set('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
   res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token');

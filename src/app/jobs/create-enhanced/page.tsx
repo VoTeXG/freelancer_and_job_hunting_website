@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,11 +13,17 @@ import { Button } from '@/components/ui/Button';
 import PageContainer from '@/components/PageContainer';
 import SectionHeader from '@/components/SectionHeader';
 import { useEscrow } from '@/hooks/useEscrow';
-import { env } from '@/lib/env';
 import { uploadJSONToIPFS, uploadToIPFS } from '@/lib/ipfs';
 import { LazyIcon } from '@/components/ui/LazyIcon';
 import { useAuth } from '@/providers/AuthProvider';
-import { useNotifications } from '@/providers/NotificationProvider';
+import { useApiErrorHandlers } from '@/lib/queryClient';
+import { RichTextEditor } from '@/components/RichTextEditor';
+import Reveal from '@/components/Reveal';
+import { LineSkeleton } from '@/components/ui/SkeletonPresets';
+import { apiFetch } from '@/lib/utils';
+
+// Wrapper to ensure no SSR crash if component imported early (already client component, but keep future-proof)
+const RichTextEditorWrapper = (props: any) => <RichTextEditor {...props} />;
 
 const jobSchema = z.object({
   title: z.string().min(10, 'Title must be at least 10 characters long'),
@@ -45,12 +52,12 @@ interface Milestone {
   deadline?: string;
 }
 
-export default function CreateJobPageEnhanced() {
+function CreateJobPageEnhanced() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const { createEscrow } = useEscrow();
   const { token, user } = useAuth();
-  const { addNotification } = useNotifications();
+  const { toastSuccess, toastError, toastInfo, bannerError } = useApiErrorHandlers();
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [skillInput, setSkillInput] = useState('');
@@ -75,13 +82,15 @@ export default function CreateJobPageEnhanced() {
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isDirty, isValid },
     setValue,
   watch,
   getValues,
     reset
   } = useForm<JobFormData>({
     resolver: zodResolver(jobSchema),
+    mode: 'onChange',
+    criteriaMode: 'all',
     defaultValues: {
       title: '',
       description: '',
@@ -99,11 +108,25 @@ export default function CreateJobPageEnhanced() {
   });
 
   const skills = watch('skills');
+  // Rich text description value (HTML) stored separately; keep RHF in sync for validation length.
+  const [richDescription, setRichDescription] = useState('');
   const requirements = watch('requirements');
   const budgetType = watch('budgetType');
   const milestones = watch('milestones');
   const useBlockchain = watch('useBlockchain');
   const budgetAmount = watch('budgetAmount');
+  const [showStickyActions, setShowStickyActions] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [navigatingAway, setNavigatingAway] = useState(false);
+
+  const extractPlainText = useCallback((value: string): string => {
+    return value
+      .replace(/<style[^>]*>[^<]*<\/style>/gi, ' ')
+      .replace(/<script[^>]*>[^<]*<\/script>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }, []);
 
   // Immediate conflict resolution sync helper
   const resolveConflict = useCallback(async (field: string, useServer: boolean) => {
@@ -131,8 +154,7 @@ export default function CreateJobPageEnhanced() {
       try {
         setServerSyncPending(true);
         const payload = { id: serverDraftId || undefined, data: { form: getValues(), _fieldTs: fieldTimestampsRef.current } };
-        const res = await fetch('/api/job-drafts', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
-        const js = await res.json();
+        const js = await apiFetch<any>('/api/job-drafts', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
         if (js?.success && js.draft) {
           if (!serverDraftId) setServerDraftId(js.draft.id);
           setLastServerSync(Date.now());
@@ -149,17 +171,19 @@ export default function CreateJobPageEnhanced() {
       let localWrapper: any = null;
       try { const raw = localStorage.getItem(draftKey); if (raw) localWrapper = JSON.parse(raw); } catch {}
       let localDraft = localWrapper?.form ? localWrapper.form : localWrapper;
+      let descriptionHtml = '';
       try { const fieldTsRaw = localStorage.getItem(draftKey+':fieldts'); if (fieldTsRaw) fieldTimestampsRef.current = JSON.parse(fieldTsRaw) || {}; } catch {}
       if (localDraft && typeof localDraft === 'object') {
         Object.entries(localDraft).forEach(([k,v]) => { // @ts-ignore
           setValue(k, v);
         });
+        const localDesc = typeof localDraft.richDescriptionHtml === 'string' ? localDraft.richDescriptionHtml : localDraft.description;
+        if (typeof localDesc === 'string') descriptionHtml = localDesc;
       }
       let localUpdatedNum = Number(localStorage.getItem(draftKey+':updatedAt') || '0');
       if (token) {
         try {
-          const res = await fetch('/api/job-drafts?page=1&limit=1', { headers: { 'Authorization': `Bearer ${token}` } });
-          const js = await res.json();
+          const js = await apiFetch<any>('/api/job-drafts?page=1&limit=1', { headers: { 'Authorization': `Bearer ${token}` } });
           if (js?.success && js.drafts?.length) {
             const draft = js.drafts[0];
             setServerDraftId(draft.id);
@@ -179,6 +203,8 @@ export default function CreateJobPageEnhanced() {
                   overridden.push(k);
                 }
               });
+              const serverDesc = typeof serverForm.richDescriptionHtml === 'string' ? serverForm.richDescriptionHtml : serverForm.description;
+              if (typeof serverDesc === 'string' && serverDesc.trim().length > 0) descriptionHtml = serverDesc;
               if (overridden.length) {
                 const newWrapper = { form: { ...(localDraft||{}), ...serverForm }, _fieldTs: fieldTimestampsRef.current };
                 localDraft = newWrapper.form;
@@ -196,40 +222,54 @@ export default function CreateJobPageEnhanced() {
           }
         } catch (e) { console.warn('Server draft fetch failed', e); }
       }
+      if (typeof descriptionHtml === 'string' && descriptionHtml.length) {
+        setRichDescription(descriptionHtml);
+        setValue('description', descriptionHtml);
+      } else if (localDraft && typeof localDraft.description === 'string' && localDraft.description.length) {
+        setRichDescription(localDraft.description);
+        setValue('description', localDraft.description);
+      }
       setRestoredDraft(true);
     })();
   }, [restoredDraft, setValue, token]);
 
   // Autosave draft (debounced)
   const autosave = useCallback((data: any) => {
+    const plain = extractPlainText(richDescription);
     try {
-      const wrapper = { form: data, _fieldTs: fieldTimestampsRef.current };
+      const wrapper = {
+        form: { ...data, description: plain, richDescriptionHtml: richDescription },
+        _fieldTs: fieldTimestampsRef.current
+      };
       localStorage.setItem(draftKey, JSON.stringify(wrapper));
       localStorage.setItem(draftKey+':updatedAt', String(Date.now()));
     } catch {}
-  }, []);
+  }, [richDescription, extractPlainText]);
 
   // Server autosave (debounced 2s, skip if no token)
   const serverAutosave = useCallback((data: any) => {
     if (!token) return;
     if (serverAutosaveTimer.current) clearTimeout(serverAutosaveTimer.current);
     serverAutosaveTimer.current = setTimeout(async () => {
+      const plain = extractPlainText(richDescription);
       try {
         setServerSyncPending(true);
-  const payload = { id: serverDraftId || undefined, data: { form: data, _fieldTs: fieldTimestampsRef.current } };
-        const res = await fetch('/api/job-drafts', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
-        const js = await res.json();
+        const payload = {
+          id: serverDraftId || undefined,
+          data: { form: { ...data, description: plain, richDescriptionHtml: richDescription }, _fieldTs: fieldTimestampsRef.current }
+        };
+        const js = await apiFetch<any>('/api/job-drafts', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
         if (js?.success && js.draft) {
           if (!serverDraftId) setServerDraftId(js.draft.id);
           setLastServerSync(Date.now());
-        }
+          }
       } catch (e) {
         console.warn('Server draft autosave failed', e);
       } finally {
         setServerSyncPending(false);
       }
     }, 2000);
-  }, [token, serverDraftId]);
+    }, [token, serverDraftId, richDescription, extractPlainText]);
 
   useEffect(() => {
     const prevRef = { current: {} as any };
@@ -252,16 +292,44 @@ export default function CreateJobPageEnhanced() {
     return () => { sub.unsubscribe(); if (autosaveTimer.current) clearTimeout(autosaveTimer.current); if (serverAutosaveTimer.current) clearTimeout(serverAutosaveTimer.current); };
   }, [watch, autosave, serverAutosave]);
 
+  // Warn on navigation if there are unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty && !navigatingAway) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty, navigatingAway]);
+
+  // Show sticky action bar after user scrolls
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY || document.documentElement.scrollTop;
+      setShowStickyActions(y > 300);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   const clearDraft = async () => {
+    const ok = window.confirm('Clear your current draft? This cannot be undone.');
+    if (!ok) return;
     try {
       localStorage.removeItem(draftKey);
       localStorage.removeItem(draftKey+':updatedAt');
       if (serverDraftId && token) {
-        await fetch(`/api/job-drafts/${serverDraftId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        await apiFetch(`/api/job-drafts/${serverDraftId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
         setServerDraftId(null);
       }
-    } catch {}
-    reset();
+      reset();
+      toastSuccess('Draft cleared', 'Cleared');
+    } catch (e:any) {
+      toastError(e?.message || 'Failed to clear draft', 'Clear Failed');
+    }
   };
 
   const addSkill = () => {
@@ -306,7 +374,31 @@ export default function CreateJobPageEnhanced() {
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    setAttachments(prev => [...prev, ...files]);
+    if (!files.length) return;
+    // Constraints
+    const MAX_FILES = 10;
+    const MAX_MB = 10;
+    const MAX_BYTES = MAX_MB * 1024 * 1024;
+    const ALLOWED = [
+      'image/jpeg','image/png','image/webp','image/gif','image/svg+xml',
+      'application/pdf','text/plain','application/zip','application/x-zip-compressed'
+    ];
+
+    const errors: string[] = [];
+    const next: File[] = [];
+    const existing = new Set(attachments.map(f => `${f.name}|${f.size}|${(f as any).lastModified||0}`));
+    for (const f of files) {
+      if (attachments.length + next.length >= MAX_FILES) { errors.push(`Max ${MAX_FILES} files`); break; }
+      if (f.size > MAX_BYTES) { errors.push(`${f.name}: > ${MAX_MB}MB`); continue; }
+      const typeOk = !f.type || ALLOWED.includes(f.type);
+      if (!typeOk) { errors.push(`${f.name}: unsupported type ${f.type || 'unknown'}`); continue; }
+      const key = `${f.name}|${f.size}|${(f as any).lastModified||0}`;
+      if (existing.has(key)) continue; // skip duplicates
+      next.push(f);
+      existing.add(key);
+    }
+    if (errors.length) toastError(errors.join('\n'), 'File Upload');
+    if (next.length) setAttachments(prev => [...prev, ...next]);
   };
 
   const removeAttachment = (index: number) => {
@@ -336,13 +428,10 @@ export default function CreateJobPageEnhanced() {
 
   const onSubmit = async (data: JobFormData) => {
     if (!isConnected || !address) {
-      alert('Please connect your wallet first');
+      bannerError('Please connect your wallet to post a job.');
       return;
     }
-    if (!token) {
-      alert('You must be logged in to post a job');
-      return;
-    }
+    // Note: we'll clear any server draft AFTER a successful post.
     if (data.budgetType === 'hourly' && (!data.budgetAmount || data.budgetAmount < 0.001)) {
       alert('Hourly rate must be at least 0.001 ETH');
       return;
@@ -379,7 +468,7 @@ export default function CreateJobPageEnhanced() {
       // Prepare job data for database
       const jobData = {
         title: data.title,
-        description: data.description,
+        description: richDescription || data.description,
         budgetAmount: data.budgetAmount,
         budgetType: data.budgetType,
         currency: data.currency,
@@ -390,20 +479,18 @@ export default function CreateJobPageEnhanced() {
         milestones: data.milestones,
         ipfsHash: ipfsMetadataHash,
         useBlockchain: data.useBlockchain,
-        creatorAddress: address
+        creatorAddress: address,
+        contentFormat: 'rich_html_v1'
       };
 
       // Save to database first
-    const response = await fetch('/api/jobs', {
+      const result = await apiFetch<any>('/api/jobs', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(jobData),
       });
-
-      const result = await response.json();
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to save job to database');
@@ -412,7 +499,8 @@ export default function CreateJobPageEnhanced() {
       // If using blockchain, create escrow contract
       if (data.useBlockchain) {
         const totalAmount = data.milestones.reduce((sum, milestone) => sum + milestone.amount, 0);
-        const feeBps = env.PLATFORM_FEE_BPS ?? 250; // default 2.5%
+  const parsedFee = Number.parseInt(process.env.NEXT_PUBLIC_PLATFORM_FEE_BPS ?? '', 10);
+  const feeBps = Number.isFinite(parsedFee) ? parsedFee : 250; // default 2.5%
         const feeDecimal = (feeBps / 10000).toString();
         const payload = {
           freelancer: '0x0000000000000000000000000000000000000000',
@@ -426,44 +514,28 @@ export default function CreateJobPageEnhanced() {
         setLastEscrowPayload(payload);
         try {
           await createEscrow(payload);
-          addNotification({
-            type: 'new_message',
-            title: 'Job Posted',
-            message: `Job posted & escrow deployed (fee ${(feeBps/100).toFixed(2)}%)`,
-            data: { jobId: result.job?.id },
-            timestamp: new Date().toISOString()
-          });
+          toastSuccess(`Job posted & escrow deployed (fee ${(feeBps/100).toFixed(2)}%)`, 'Job Posted');
         } catch (escrowError) {
           console.error('Escrow creation failed:', escrowError);
           setPendingEscrowJobId(result.job?.id || null);
-          addNotification({
-            type: 'new_message',
-            title: 'Escrow Pending',
-            message: 'Job saved, escrow deployment failed. Retry from dashboard.',
-            data: { error: (escrowError as any)?.message, jobId: result.job?.id },
-            timestamp: new Date().toISOString()
-          });
+          toastInfo('Job saved, escrow deployment failed. You can retry from the dashboard.', 'Escrow Pending');
         }
       } else {
-        addNotification({
-          type: 'new_message',
-          title: 'Job Posted',
-          message: 'Your job has been posted successfully',
-          data: { jobId: result.job?.id },
-          timestamp: new Date().toISOString()
-        });
+        toastSuccess('Your job has been posted successfully', 'Job Posted');
       }
+
+      // Clear server draft after successful job post
+      try {
+        if (token && serverDraftId) {
+          await apiFetch(`/api/job-drafts/${serverDraftId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+          setServerDraftId(null);
+        }
+      } catch {}
 
       router.push('/dashboard');
     } catch (error) {
       console.error('Failed to post job:', error);
-      addNotification({
-        type: 'new_message',
-        title: 'Job Post Failed',
-        message: error instanceof Error ? error.message : 'Unknown error',
-        data: {},
-        timestamp: new Date().toISOString()
-      });
+      toastError(error instanceof Error ? error.message : 'Unknown error', 'Job Post Failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -483,32 +555,148 @@ export default function CreateJobPageEnhanced() {
     setEscrowRetrying(true);
     try {
       await createEscrow(lastEscrowPayload);
-      addNotification({
-        type: 'new_message',
-        title: 'Escrow Deployed',
-        message: 'Escrow deployment succeeded on retry',
-        data: { jobId: pendingEscrowJobId },
-        timestamp: new Date().toISOString()
-      });
+      toastSuccess('Escrow deployment succeeded on retry', 'Escrow Deployed');
       setPendingEscrowJobId(null);
     } catch (err) {
-      addNotification({
-        type: 'new_message',
-        title: 'Escrow Retry Failed',
-        message: (err as any)?.message || 'Unknown error',
-        data: { jobId: pendingEscrowJobId },
-        timestamp: new Date().toISOString()
-      });
+      toastError((err as any)?.message || 'Unknown error', 'Escrow Retry Failed');
     } finally {
       setEscrowRetrying(false);
     }
   };
 
+  // Immediate save draft (no debounce), used by Save buttons
+  const saveDraftImmediate = useCallback(async () => {
+    if (!token) {
+      bannerError('You must be logged in to save drafts.');
+      return;
+    }
+    try {
+      setSavingDraft(true);
+      setServerSyncPending(true);
+      const payload = { id: serverDraftId || undefined, data: { form: getValues(), _fieldTs: fieldTimestampsRef.current } };
+      const js = await apiFetch<any>('/api/job-drafts', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(payload)
+      });
+      if (js?.success && js.draft) {
+        if (!serverDraftId) setServerDraftId(js.draft.id);
+        setLastServerSync(Date.now());
+        toastSuccess('Draft saved', 'Saved');
+      } else {
+        toastError(js?.error || 'Failed to save draft', 'Save failed');
+      }
+    } catch (e:any) {
+      toastError(e?.message || 'Failed to save draft', 'Save error');
+    } finally {
+      setSavingDraft(false);
+      setServerSyncPending(false);
+    }
+  }, [token, serverDraftId, getValues, toastSuccess, toastError]);
+
+  const onCancel = useCallback(() => {
+    const hasUnsaved = isDirty || serverSyncPending;
+    if (hasUnsaved) {
+      const ok = window.confirm('You have unsaved changes. Leave this page?');
+      if (!ok) return;
+    }
+    setNavigatingAway(true);
+    // Prefer going back; if there is no history entry, user agent will stay but that's acceptable for now
+    router.back();
+  }, [isDirty, serverSyncPending, router]);
+
+  const canSubmit = isValid && isConnected && !!token && !ipfsUploading && !isSubmitting;
+
   return (
     <PageContainer className="max-w-4xl">
-      <SectionHeader title="Post a New Job" subtitle="Create a secure, blockchain-powered freelance project" />
+      <Reveal>
+        <SectionHeader
+          title="Post a New Job"
+          subtitle="Create a secure, blockchain-powered freelance project"
+          actions={(
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={saveDraftImmediate}
+                disabled={!token || savingDraft}
+                loading={savingDraft}
+                loadingText="Saving..."
+                size="sm"
+              >
+                <span className="inline-flex items-center gap-1">
+                  <LazyIcon name="BookmarkSquareIcon" className="h-4 w-4" />
+                  Save Draft
+                </span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={clearDraft}
+                disabled={isSubmitting}
+                size="sm"
+              >
+                <span className="inline-flex items-center gap-1">
+                  <LazyIcon name="TrashIcon" className="h-4 w-4" />
+                  Clear
+                </span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onCancel}
+                disabled={isSubmitting}
+                size="sm"
+              >
+                Cancel
+              </Button>
+              {serverDraftId && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={async () => {
+                    if (!serverDraftId) return;
+                    try {
+                      setIsSubmitting(true);
+                      const js = await apiFetch<any>(`/api/job-drafts/${serverDraftId}/publish`, { method: 'POST', headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) } });
+                      if (js?.success) {
+                        toastSuccess('Draft published as job', 'Draft Published');
+                        router.push('/dashboard');
+                      } else {
+                        toastError(js?.error || 'Unknown error', 'Publish Failed');
+                      }
+                    } catch (e:any) {
+                      toastError(e?.message || 'Unknown error', 'Publish Error');
+                    } finally { setIsSubmitting(false); }
+                  }}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <LazyIcon name="ArrowUpOnSquareIcon" className="h-4 w-4" />
+                    Publish
+                  </span>
+                </Button>
+              )}
+            </>
+          )}
+          status={serverDraftId ? (serverSyncPending ? 'Draft saving…' : lastServerSync ? 'Draft saved ✓' : 'Draft ready') : 'No draft saved'}
+        />
+      </Reveal>
+      <Reveal delay={40}>
+        <div className="mb-6 rounded-xl p-[1px] bg-gradient-to-r from-purple-600/60 via-blue-500/60 to-cyan-500/60">
+          <div className="rounded-[11px] bg-white dark:bg-[var(--surface-primary)] p-4 flex items-center gap-3">
+            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 flex items-center justify-center text-white">
+              <LazyIcon name="ShieldCheckIcon" className="h-5 w-5" />
+            </div>
+            <div className="text-sm text-gray-600 dark:text-[var(--text-muted)]">
+              <span className="font-medium text-gray-900 dark:text-[var(--text-primary)]">Pro tip:</span> Clear sections, scoped milestones, and a realistic budget attract better proposals.
+            </div>
+          </div>
+        </div>
+      </Reveal>
       {serverConflict && (
-        <div className="mb-4 text-xs bg-amber-50 border border-amber-200 text-amber-800 p-2 rounded space-y-2">
+        <Reveal delay={50} className="mb-4">
+          <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 p-2 rounded space-y-2">
           <div>
             Local draft ({new Date(serverConflict.localUpdated).toLocaleTimeString()}) newer than server ({new Date(serverConflict.serverUpdated).toLocaleTimeString()}).
           </div>
@@ -528,25 +716,31 @@ export default function CreateJobPageEnhanced() {
               ))}
             </div>
           )}
-        </div>
+          </div>
+        </Reveal>
       )}
-
   <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+      {/* Grid layout for main content */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Wallet Connection Status */}
-        {!isConnected && (
-          <Card className="border-yellow-200 bg-yellow-50">
-            <CardContent className="flex items-center space-x-3 p-4">
-              <LazyIcon name="ShieldCheckIcon" className="h-6 w-6 text-yellow-600" />
-              <div>
-                <p className="text-yellow-800 font-medium">Wallet Not Connected</p>
-                <p className="text-yellow-700 text-sm">Connect your wallet to enable blockchain features</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Blockchain Toggle */}
-        <Card>
+        { !isConnected && (
+          <div className="lg:col-span-3">
+            <Reveal delay={100}>
+              <Card className="border-yellow-200 bg-yellow-50">
+                <CardContent className="flex items-center space-x-3 p-4">
+                  <LazyIcon name="ShieldCheckIcon" className="h-6 w-6 text-yellow-600" />
+                  <div>
+                    <p className="text-yellow-800 font-medium">Wallet Not Connected</p>
+                    <p className="text-yellow-700 text-sm">Connect your wallet to enable blockchain features</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </Reveal>
+          </div>
+        ) }
+        <div className="lg:col-span-1">
+          <Reveal delay={150}>
+        <Card hoverable glass density="compact">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <LazyIcon name="ShieldCheckIcon" className="h-6 w-6 text-purple-600" />
@@ -586,9 +780,12 @@ export default function CreateJobPageEnhanced() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Basic Information */}
-        <Card>
+          </Reveal>
+        </div>
+        {/* Job Details (Left column) */}
+        <div className="lg:col-span-2">
+          <Reveal delay={200}>
+        <Card hoverable glass density="spacious">
           <CardHeader>
             <CardTitle>Job Details</CardTitle>
           </CardHeader>
@@ -601,9 +798,15 @@ export default function CreateJobPageEnhanced() {
                 {...register('title')}
                 type="text"
                 data-testid="job-title"
+                id="job-title"
+                aria-invalid={!!errors.title}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 placeholder="e.g., Build a responsive React web application"
               />
+              <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
+                <span>Minimum 10 characters</span>
+                <span>{(watch('title')||'').length}/100</span>
+              </div>
               {errors.title && (
                 <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>
               )}
@@ -613,13 +816,31 @@ export default function CreateJobPageEnhanced() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Job Description *
               </label>
-              <textarea
-                {...register('description')}
-                rows={6}
-                data-testid="job-description"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                placeholder="Describe your project in detail..."
-              />
+              <div className="border border-gray-300 rounded-md focus-within:ring-2 focus-within:ring-purple-500 focus-within:border-purple-500 overflow-hidden">
+                {/* Hidden textarea to satisfy RHF validation length; mirror plain text length approximation */}
+                <textarea
+                  {...register('description')}
+                  value={richDescription.replace(/<[^>]+>/g,' ').slice(0,15000)}
+                  onChange={()=>{ /* ignore manual edits; controlled by editor */ }}
+                  className="hidden"
+                  readOnly
+                />
+                {/* Lazy-load RichTextEditor to avoid SSR issues */}
+                <RichTextEditorWrapper
+                  value={richDescription}
+                  onChange={(html: string) => {
+                    setRichDescription(html);
+                  }}
+                  placeholder="Describe your project in detail..."
+                  className="rich-editor"
+                  minHeight={220}
+                  aria-label="Job description rich text editor"
+                />
+              </div>
+              <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
+                <span>Minimum 50 characters</span>
+                <span>{richDescription.replace(/<[^>]+>/g,' ').trim().length}/15000</span>
+              </div>
               {errors.description && (
                 <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>
               )}
@@ -663,8 +884,11 @@ export default function CreateJobPageEnhanced() {
                     </div>
                   ))}
                   {ipfsUploading && (
-                    <div className="w-full bg-gray-200 rounded h-2 overflow-hidden">
-                      <div className="bg-purple-500 h-2 transition-all" style={{ width: `${uploadProgress}%` }} />
+                    <div className="space-y-2">
+                      <div className="w-full bg-gray-200 rounded h-2 overflow-hidden">
+                        <div className="bg-purple-500 h-2 transition-all" style={{ width: `${uploadProgress}%` }} />
+                      </div>
+                      <LineSkeleton width={`${Math.max(20, Math.min(100, uploadProgress))}%`} className="h-3 rounded" />
                     </div>
                   )}
                 </div>
@@ -672,9 +896,13 @@ export default function CreateJobPageEnhanced() {
             </div>
           </CardContent>
         </Card>
+          </Reveal>
+        </div>
 
-        {/* Budget & Payment */}
-        <Card>
+        {/* Budget & Payment (Right) */}
+        <div className="lg:col-span-1">
+          <Reveal delay={250}>
+        <Card hoverable glass>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <LazyIcon name="CurrencyDollarIcon" className="h-6 w-6 text-purple-600" />
@@ -737,9 +965,13 @@ export default function CreateJobPageEnhanced() {
             </div>
           </CardContent>
         </Card>
+          </Reveal>
+        </div>
 
-        {/* Milestones */}
-        <Card>
+        {/* Project Milestones (Left) */}
+        <div className="lg:col-span-2">
+          <Reveal delay={300}>
+        <Card hoverable glass>
           <CardHeader>
             <CardTitle>Project Milestones</CardTitle>
             <p className="text-sm text-gray-600">Break your project into milestone-based payments</p>
@@ -750,13 +982,15 @@ export default function CreateJobPageEnhanced() {
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-medium text-gray-700">Milestone {index + 1}</h4>
                   {milestones.length > 1 && (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      aria-label={`Remove Milestone ${index + 1}`}
                       onClick={() => removeMilestone(index)}
-                      className="text-red-500 hover:text-red-700"
+                      className="text-red-600 hover:text-red-700"
                     >
                       <LazyIcon name="XMarkIcon" className="h-4 w-4" />
-                    </button>
+                    </Button>
                   )}
                 </div>
                 
@@ -803,14 +1037,15 @@ export default function CreateJobPageEnhanced() {
               </div>
             ))}
             
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={addMilestone}
-              className="w-full border-2 border-dashed border-gray-300 rounded-lg p-4 text-gray-600 hover:border-purple-400 hover:text-purple-600 transition-colors"
+              className="w-full border-dashed"
             >
-              <LazyIcon name="PlusIcon" className="h-5 w-5 mx-auto mb-1" />
+              <LazyIcon name="PlusIcon" className="h-5 w-5 mr-2" />
               Add Another Milestone
-            </button>
+            </Button>
             
             {milestones.length > 0 && (
         <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
@@ -826,9 +1061,13 @@ export default function CreateJobPageEnhanced() {
             )}
           </CardContent>
         </Card>
+          </Reveal>
+        </div>
 
-        {/* Skills and Requirements */}
-        <Card>
+        {/* Skills and Requirements (Left) */}
+        <div className="lg:col-span-2">
+          <Reveal delay={350}>
+        <Card hoverable glass>
           <CardHeader>
             <CardTitle>Skills & Requirements</CardTitle>
           </CardHeader>
@@ -858,13 +1097,16 @@ export default function CreateJobPageEnhanced() {
                     className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800"
                   >
                     {skill}
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Remove skill ${skill}`}
                       onClick={() => removeSkill(skill)}
-                      className="ml-2 text-purple-600 hover:text-purple-800"
+                      className="ml-2 text-purple-700 hover:text-purple-900"
                     >
                       <LazyIcon name="XMarkIcon" className="h-3 w-3" />
-                    </button>
+                    </Button>
                   </span>
                 ))}
               </div>
@@ -896,13 +1138,15 @@ export default function CreateJobPageEnhanced() {
                   {requirements.map((requirement, index) => (
                     <li key={index} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded">
                       <span className="text-sm text-gray-700">{requirement}</span>
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        aria-label={`Remove requirement ${index + 1}`}
                         onClick={() => removeRequirement(index)}
-                        className="text-red-500 hover:text-red-700"
+                        className="text-red-600 hover:text-red-700"
                       >
                         <LazyIcon name="XMarkIcon" className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -910,9 +1154,13 @@ export default function CreateJobPageEnhanced() {
             </div>
           </CardContent>
         </Card>
+          </Reveal>
+        </div>
 
-        {/* Project Timeline */}
-        <Card>
+        {/* Project Timeline (Right) */}
+        <div className="lg:col-span-1">
+          <Reveal delay={400}>
+        <Card hoverable glass>
           <CardHeader>
             <CardTitle>Timeline</CardTitle>
           </CardHeader>
@@ -952,9 +1200,13 @@ export default function CreateJobPageEnhanced() {
             </div>
           </CardContent>
         </Card>
+          </Reveal>
+        </div>
 
-        {/* Live Preview */}
-        <Card>
+        {/* Live Preview (Right) */}
+        <div className="lg:col-span-1">
+          <Reveal delay={450}>
+        <Card hoverable glass>
           <CardHeader>
             <CardTitle>Live Preview</CardTitle>
           </CardHeader>
@@ -979,32 +1231,49 @@ export default function CreateJobPageEnhanced() {
             </div>
           </CardContent>
         </Card>
+          </Reveal>
+        </div>
+      </div>
 
   {/* Submit */}
+        <Reveal delay={500}>
         <div className="flex space-x-4">
           <Button
             type="submit"
-            disabled={isSubmitting || ipfsUploading || !isConnected}
+            disabled={!canSubmit}
+            loading={isSubmitting}
+            loadingText={ipfsUploading ? 'Uploading to IPFS...' : 'Creating Job...'}
+            size="lg"
+            variant="gradient"
             className="flex-1"
           >
-            {isSubmitting ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                {ipfsUploading ? 'Uploading to IPFS...' : 'Creating Job...'}
-              </>
-            ) : (
-              'Post Job'
-            )}
+            <span className="inline-flex items-center gap-2">
+              <LazyIcon name="RocketLaunchIcon" className="h-5 w-5" />
+              Post Job
+            </span>
           </Button>
           
           <div className="flex gap-3 items-center flex-wrap">
             <Button
               type="button"
-              variant="outline"
-              onClick={() => router.back()}
+              variant="ghost"
+              onClick={onCancel}
               disabled={isSubmitting}
             >
               Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={saveDraftImmediate}
+              disabled={!token || savingDraft}
+              loading={savingDraft}
+              loadingText="Saving..."
+            >
+              <span className="inline-flex items-center gap-1">
+                <LazyIcon name="BookmarkSquareIcon" className="h-4 w-4" />
+                Save Draft
+              </span>
             </Button>
             <Button
               type="button"
@@ -1012,40 +1281,84 @@ export default function CreateJobPageEnhanced() {
               onClick={clearDraft}
               disabled={isSubmitting}
             >
-              Clear Draft
+              <span className="inline-flex items-center gap-1">
+                <LazyIcon name="TrashIcon" className="h-4 w-4" />
+                Clear Draft
+              </span>
             </Button>
             {serverDraftId && (
               <Button
                 type="button"
-                variant="outline"
-                disabled={!token || isSubmitting}
+                variant="secondary"
+                disabled={!token}
+                loading={isSubmitting}
+                loadingText="Publishing..."
                 onClick={async () => {
                   if (!serverDraftId) return;
                   try {
                     setIsSubmitting(true);
-                    const res = await fetch(`/api/job-drafts/${serverDraftId}/publish`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
-                    const js = await res.json();
+                    const js = await apiFetch<any>(`/api/job-drafts/${serverDraftId}/publish`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
                     if (js?.success) {
-                      addNotification({ type: 'new_message', title: 'Draft Published', message: 'Draft published as job', data: { jobId: js.job?.id }, timestamp: new Date().toISOString() });
+                      toastSuccess('Draft published as job', 'Draft Published');
                       router.push('/dashboard');
                     } else {
-                      addNotification({ type: 'new_message', title: 'Publish Failed', message: js?.error || 'Unknown error', data: {}, timestamp: new Date().toISOString() });
+                      toastError(js?.error || 'Unknown error', 'Publish Failed');
                     }
                   } catch (e:any) {
-                    addNotification({ type: 'new_message', title: 'Publish Error', message: e?.message || 'Unknown error', data: {}, timestamp: new Date().toISOString() });
+                    toastError(e?.message || 'Unknown error', 'Publish Error');
                   } finally { setIsSubmitting(false); }
                 }}
-              >Publish Draft</Button>
+              >
+                <span className="inline-flex items-center gap-1">
+                  <LazyIcon name="ArrowUpOnSquareIcon" className="h-4 w-4" />
+                  Publish Draft
+                </span>
+              </Button>
             )}
             {serverDraftId && (
-              <span className="text-[10px] text-gray-500">Saved{serverSyncPending ? '...' : lastServerSync ? ' ✓' : ''}</span>
+              <span className="text-[10px] text-gray-500" role="status" aria-live="polite">Saved{serverSyncPending ? '...' : lastServerSync ? ' ✓' : ''}</span>
             )}
           </div>
         </div>
+        </Reveal>
       </form>
+
+      {/* Sticky Action Bar */}
+      {showStickyActions && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70">
+          <div className="mx-auto max-w-4xl px-4 py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 text-xs text-gray-600">
+              <span className="hidden sm:inline-flex items-center gap-1"><LazyIcon name="CurrencyDollarIcon" className="h-4 w-4" />{budgetType==='fixed' ? `${totalMilestoneAmount.toFixed(3)} ETH total` : `${(budgetAmount||0).toFixed(3)} ETH / hr`}</span>
+              {Object.keys(errors||{}).length > 0 && (
+                <span className="inline-flex items-center gap-1 text-red-600"><LazyIcon name="ExclamationTriangleIcon" className="h-4 w-4" />{Object.keys(errors).length} error{Object.keys(errors).length>1?'s':''}</span>
+              )}
+              {serverDraftId && (
+                <span className="inline-flex items-center gap-1">Draft {serverSyncPending ? 'saving…' : lastServerSync ? 'saved' : 'ready'}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {serverSyncPending && (
+                <span className="inline-flex items-center gap-1 text-xs text-gray-500" aria-live="polite">
+                  <span className="h-2 w-2 rounded-full bg-purple-500 animate-pulse" /> Saving…
+                </span>
+              )}
+              <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={saveDraftImmediate} disabled={!token || savingDraft} loading={savingDraft} loadingText="Saving...">Save Draft</Button>
+              <Button type="button" variant="outline" onClick={clearDraft} disabled={isSubmitting}>Clear Draft</Button>
+              <Button type="submit" onClick={handleSubmit(onSubmit)} disabled={!canSubmit} loading={isSubmitting} loadingText={ipfsUploading ? 'Uploading to IPFS…' : 'Creating Job…'} variant="gradient">
+                Post Job
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
   </PageContainer>
   );
 }
+
+// Disable SSR for this page to prevent hydration mismatches caused by extensions
+// injecting attributes into inputs before React hydrates (e.g., password managers, 2FA helpers).
+export default dynamic(() => Promise.resolve(CreateJobPageEnhanced), { ssr: false });
 
 // Inline component used above
 function ConflictResolutionRow({ field, onUseServer, onKeepLocal }: { field: string; onUseServer: () => void; onKeepLocal: () => void; }) {

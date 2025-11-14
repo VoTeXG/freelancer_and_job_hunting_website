@@ -1,3 +1,5 @@
+import { recordMetricEvent } from '@/lib/metrics';
+
 type Key = string;
 
 // Simple in-memory token bucket per key; for demo/thesis only
@@ -14,10 +16,12 @@ export function rateLimit({ key, limit, windowMs }: { key: Key; limit: number; w
 
   if (bucket.tokens <= 0) {
     buckets.set(key, bucket);
+    recordMetricEvent('ratelimit.block', { key });
     return { allowed: false, remaining: 0 };
   }
 
   bucket.tokens -= 1;
   buckets.set(key, bucket);
+  recordMetricEvent('ratelimit.allow', { key, remaining: bucket.tokens });
   return { allowed: true, remaining: bucket.tokens };
 }

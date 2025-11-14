@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,102 +8,80 @@ datasource db {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  username    String   @unique
-  email       String   @unique
-  walletAddress String? @unique
-  password    String?
-  userType    UserType @default(FREELANCER)
-  isVerified  Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Profile information
-  profile Profile?
-
-  // Relationships
-  postedJobs    Job[]           @relation("ClientJobs")
-  applications  Application[]   @relation("FreelancerApplications")
-  sentReviews   Review[]        @relation("ReviewSender")
-  receivedReviews Review[]      @relation("ReviewReceiver")
-  drafts        JobDraft[]
-  refreshTokens RefreshToken[]
+  id              String         @id @default(cuid())
+  username        String         @unique
+  email           String         @unique
+  walletAddress   String?        @unique
+  password        String?
+  userType        UserType       @default(FREELANCER)
+  isVerified      Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  applications    Application[]  @relation("FreelancerApplications")
+  drafts          JobDraft[]
+  postedJobs      Job[]          @relation("ClientJobs")
+  profile         Profile?
+  refreshTokens   RefreshToken[]
+  sentReviews     Review[]       @relation("ReviewSender")
+  receivedReviews Review[]       @relation("ReviewReceiver")
 
   @@map("users")
 }
 
 model Profile {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  firstName    String?
-  lastName     String?
-  bio          String?
-  title        String?
-  location     String?
-  website      String?
-  companyName  String?
-  avatar       String?
-  
-  // Professional details
-  skills       String[]
-  hourlyRate   Float?
-  portfolio    String[]
-  experience   Int?         // years of experience
-  
-  // Reputation
-  rating       Float?       @default(0)
-  completedJobs Int?        @default(0)
-  totalEarnings Float?      @default(0)
-  
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  firstName     String?
+  lastName      String?
+  bio           String?
+  title         String?
+  location      String?
+  website       String?
+  companyName   String?
+  avatar        String?
+  skills        String[]
+  hourlyRate    Float?
+  portfolio     String[]
+  experience    Int?
+  rating        Float?   @default(0)
+  completedJobs Int?     @default(0)
+  totalEarnings Float?   @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("profiles")
   @@index([hourlyRate])
   @@index([experience])
   @@index([rating])
+  @@map("profiles")
 }
 
 model Job {
-  id          String     @id @default(cuid())
-  title       String
-  description String
-  clientId    String
-  client      User       @relation("ClientJobs", fields: [clientId], references: [id], onDelete: Cascade)
-  
-  // Budget information
-  budgetAmount Float
-  budgetType   BudgetType
-  currency     String     @default("USD")
-  
-  // Job details
-  duration     String
-  deadline     DateTime?
-  skills       String[]
-  requirements String[]
-  
-  // Status
-  status       JobStatus  @default(OPEN)
-  // Escrow / blockchain integration flags
-  useBlockchain             Boolean   @default(false)
-  escrowDeployed            Boolean   @default(false)
-  escrowPending             Boolean   @default(false)
-  escrowDeploymentAttempts  Int       @default(0)
-  escrowOnChainId           Int?
-  // Rollback / cancellation tracking
-  escrowRollbackRequested   Boolean   @default(false)
-  escrowRollbackReason      String?
-  escrowCancelledAt         DateTime?
-  
-  // Relationships
-  applications Application[]
-  
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id                       String        @id @default(cuid())
+  title                    String
+  description              String
+  clientId                 String
+  budgetAmount             Float
+  budgetType               BudgetType
+  currency                 String        @default("USD")
+  duration                 String
+  deadline                 DateTime?
+  skills                   String[]
+  requirements             String[]
+  status                   JobStatus     @default(OPEN)
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+  escrowDeployed           Boolean       @default(false)
+  escrowDeploymentAttempts Int           @default(0)
+  escrowOnChainId          Int?
+  escrowPending            Boolean       @default(false)
+  useBlockchain            Boolean       @default(false)
+  escrowRollbackRequested  Boolean       @default(false)
+  escrowRollbackReason     String?
+  escrowCancelledAt        DateTime?
+  applications             Application[]
+  client                   User          @relation("ClientJobs", fields: [clientId], references: [id], onDelete: Cascade)
 
-  @@map("jobs")
   @@index([status])
   @@index([clientId])
   @@index([createdAt])
@@ -117,73 +89,66 @@ model Job {
   @@index([escrowPending])
   @@index([escrowDeployed])
   @@index([escrowRollbackRequested])
+  @@map("jobs")
 }
 
 model Application {
-  id               String            @id @default(cuid())
-  jobId            String
-  job              Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  freelancerId     String
-  freelancer       User              @relation("FreelancerApplications", fields: [freelancerId], references: [id], onDelete: Cascade)
-  
-  coverLetter      String
-  proposedRate     Float
+  id                String            @id @default(cuid())
+  jobId             String
+  freelancerId      String
+  coverLetter       String
+  proposedRate      Float
   estimatedDuration String
-  portfolio        String?
-  
-  status           ApplicationStatus @default(PENDING)
-  
-  appliedAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  portfolio         String?
+  status            ApplicationStatus @default(PENDING)
+  appliedAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  freelancer        User              @relation("FreelancerApplications", fields: [freelancerId], references: [id], onDelete: Cascade)
+  job               Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@unique([jobId, freelancerId])
   @@map("applications")
 }
 
-// Server-side persisted job posting drafts
 model JobDraft {
   id        String   @id @default(cuid())
   clientId  String
-  client    User     @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  data      Json     // arbitrary partial job form structure
+  data      Json
   published Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  client    User     @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId, updatedAt])
   @@map("job_drafts")
 }
 
 model Review {
-  id           String   @id @default(cuid())
-  fromUserId   String
-  fromUser     User     @relation("ReviewSender", fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUserId     String
-  toUser       User     @relation("ReviewReceiver", fields: [toUserId], references: [id], onDelete: Cascade)
-  
-  rating       Int      // 1-5 stars
-  comment      String?
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id         String   @id @default(cuid())
+  fromUserId String
+  toUserId   String
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  fromUser   User     @relation("ReviewSender", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser     User     @relation("ReviewReceiver", fields: [toUserId], references: [id], onDelete: Cascade)
 
   @@unique([fromUserId, toUserId])
   @@map("reviews")
 }
 
-// Persistent refresh tokens for rotation & revocation
 model RefreshToken {
-  tokenHash    String   @id
+  tokenHash    String    @id
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userAgent    String?
   ip           String?
   expiresAt    DateTime
   revokedAt    DateTime?
   replacedById String?
-
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("refresh_tokens")

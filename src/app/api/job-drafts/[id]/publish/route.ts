@@ -16,9 +16,10 @@ export async function POST(req: NextRequest, context: { params: Promise<Params> 
   if (!csrf.ok) return NextResponse.json({ success: false, error: csrf.reason || 'CSRF failed' }, { status: 403 });
   const ct = ensureJson(req);
   if (!ct.ok) return NextResponse.json({ success: false, error: ct.reason }, { status: 415 });
-  const auth = req.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-  const access = verifyAccessToken(auth.split(' ')[1]);
+  const auth = req.headers.get('authorization') || '';
+  const token = req.cookies.get('session_token')?.value || (auth.startsWith('Bearer ') ? auth.split(' ')[1] : undefined);
+  if (!token) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  const access = verifyAccessToken(token);
   if (!access) return NextResponse.json({ success: false, error: 'Invalid token' }, { status: 401 });
   if (!access.scope?.includes('write:jobs')) return NextResponse.json({ success: false, error: 'Forbidden: missing scope write:jobs' }, { status: 403 });
 

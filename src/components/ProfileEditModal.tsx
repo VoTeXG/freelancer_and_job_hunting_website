@@ -261,9 +261,11 @@ export default function ProfileEditModal({
           </Button>
           <Button
             type="submit"
+            loading={isSubmitting}
+            loadingText="Saving…"
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Saving...' : 'Save Changes'}
+            Save Changes
           </Button>
         </div>
       </form>

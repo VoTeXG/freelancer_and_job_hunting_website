@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useMemo } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useMemo, useRef } from 'react';
 import { useToast } from '@/providers/ToastProvider';
 import { useAccount } from 'wagmi';
 import { io, Socket } from 'socket.io-client';
@@ -36,28 +36,58 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filterTypes, setFilterTypes] = useState<string[]>([]); // empty => no filter
 
+  const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttempts = useRef(0);
+
   useEffect(() => {
-    if (isConnected && address) {
-      // Initialize Socket.IO connection
+    if (!(isConnected && address)) return;
+
+    let stopped = false;
+    const connect = () => {
       const socketInstance = io({
         path: '/api/socket',
         addTrailingSlash: false,
+        // Send auth token if available (placeholder: localStorage?)
+        auth: () => ({ token: typeof window !== 'undefined' ? localStorage.getItem('access_token') : undefined })
       });
 
       socketInstance.on('connect', () => {
+        reconnectAttempts.current = 0;
         console.log('Connected to notification server');
-        // Join user's personal room
         socketInstance.emit('join-user-room', address);
+        // Start heartbeat
+        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+        heartbeatRef.current = setInterval(() => {
+          socketInstance.emit('presence:ping');
+        }, 25_000); // 25s heartbeat
       });
 
-      socketInstance.on('notification', (notificationData) => {
+      socketInstance.on('disconnect', () => {
+        if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+      });
+
+      // Rate limit notifications from server (client side guard) if needed
+      const lastNotfTimes: number[] = [];
+      const clientRateWindow = 5_000; // 5s
+      const clientMaxInWindow = 25;
+
+      socketInstance.on('notification', (notificationData, serverId?: string) => {
+        const now = Date.now();
+        // prune
+        while (lastNotfTimes.length && lastNotfTimes[0] < now - clientRateWindow) lastNotfTimes.shift();
+        if (lastNotfTimes.length >= clientMaxInWindow) {
+          // Drop & ack to suppress retries
+          if (serverId) socketInstance.emit('notification:ack', serverId);
+          return;
+        }
+        lastNotfTimes.push(now);
         const notification: Notification = {
-          id: `notification_${Date.now()}_${Math.random()}`,
+          id: serverId || `notification_${now}_${Math.random()}`,
           ...notificationData,
           read: false,
         };
         setNotifications(prev => [notification, ...prev]);
-        // Mirror as toast
+        if (serverId) socketInstance.emit('notification:ack', serverId);
         push({
           title: notification.title,
           message: notification.message,
@@ -69,13 +99,30 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         }
       });
 
-      setSocket(socketInstance);
+      socketInstance.on('rate_limited', (info) => {
+        console.warn('Realtime rate limited', info);
+      });
 
-      return () => {
-        socketInstance.disconnect();
-        setSocket(null);
-      };
-    }
+      socketInstance.on('connect_error', (err) => {
+        reconnectAttempts.current += 1;
+        const attempt = reconnectAttempts.current;
+        const backoff = Math.min(30_000, 1000 * Math.pow(2, attempt));
+        console.warn(`Socket connect error (${attempt}) retrying in ${backoff}ms`, err.message);
+        setTimeout(() => {
+          if (!stopped) connect();
+        }, backoff + Math.random() * 500); // jitter
+      });
+
+      setSocket(socketInstance);
+    };
+    connect();
+
+    return () => {
+      stopped = true;
+      if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+      if (socket) socket.disconnect();
+      setSocket(null);
+    };
   }, [address, isConnected]);
 
   // Request notification permission

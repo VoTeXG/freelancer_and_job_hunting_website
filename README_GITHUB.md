@@ -161,6 +161,12 @@ npm start
 ```
 
 ## 📖 Key Components
+## 📚 Additional Docs
+- Developer Guide: `docs/DEVELOPER_GUIDE.md`
+- Public Roadmap: `docs/ROADMAP_PUBLIC.md`
+- Changelog: `CHANGELOG.md`
+- Support: `.github/SUPPORT.md`
+
 
 ### Smart Contracts
 - **FreelancerEscrow.sol**: Multi-party escrow with milestones
