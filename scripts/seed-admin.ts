@@ -10,6 +10,7 @@ async function main() {
   const existing = await prisma.user.findFirst({ where: { OR: [{ username }, { email }] }, select: { id: true } });
   if (existing) {
     console.log('[seed-admin] User already exists. Skipping create.');
+    await prisma.user.update({ where: { id: existing.id }, data: { isVerified: true } });
   } else {
     const hashed = await hashPassword(password);
     const user = await prisma.user.create({
@@ -19,6 +20,7 @@ async function main() {
         password: hashed,
         userType: 'CLIENT', // give job posting + escrow manage rights
         walletAddress: wallet,
+        isVerified: true,
         profile: { create: {} },
       },
       select: { id: true, username: true, userType: true, walletAddress: true }

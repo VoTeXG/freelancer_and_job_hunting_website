@@ -30,6 +30,7 @@ async function main() {
         username,
         walletAddress: walletAddress || null,
         userType: userType ?? UserType.FREELANCER,
+        isVerified: true,
         ...(hashed ? { password: hashed } : {}),
       },
       create: {
@@ -46,7 +47,8 @@ async function main() {
     await prisma.profile.upsert({
       where: { userId: user.id },
       update: {
-        ...profile,
+        ...(profile || {}),
+        avatar: (profile as any)?.avatar || null,
       },
       create: {
         userId: user.id,
@@ -104,6 +106,7 @@ async function main() {
       rating: 4.9,
       completedJobs: 47,
       totalEarnings: 125000,
+      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=alice',
     },
   });
 
@@ -122,6 +125,7 @@ async function main() {
       rating: 4.7,
       completedJobs: 32,
       totalEarnings: 82000,
+      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=bob',
     },
   });
 
@@ -175,6 +179,7 @@ async function main() {
       rating: 4.5,
       completedJobs: 18,
       totalEarnings: 61000,
+      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=charlie',
     },
   });
 
@@ -193,6 +198,7 @@ async function main() {
       rating: 4.8,
       completedJobs: 40,
       totalEarnings: 145000,
+      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=diana',
     },
   });
 
@@ -211,6 +217,7 @@ async function main() {
       rating: 4.6,
       completedJobs: 22,
       totalEarnings: 54000,
+      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=eve',
     },
   });
 

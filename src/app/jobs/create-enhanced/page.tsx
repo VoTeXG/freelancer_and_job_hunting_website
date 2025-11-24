@@ -31,16 +31,17 @@ import { apiFetch } from '@/lib/utils';
 const jobSchema = z.object({
   title: z.string().min(10, 'Title must be at least 10 characters long'),
   description: z.string().min(50, 'Description must be at least 50 characters long'),
-  budgetAmount: z.number().min(0.001, 'Budget must be at least 0.001 ETH'),
+  budgetAmount: z.number().min(0.001, 'Budget must be at least 0.001'),
   budgetType: z.enum(['fixed', 'hourly']),
-  currency: z.literal('ETH'), // For now, only ETH
+  currency: z.enum(['ETH', 'USD', 'EUR']),
+  paymentMethod: z.enum(['crypto', 'card', 'qr']),
   duration: z.string().min(1, 'Duration is required'),
   deadline: z.string().optional(),
   skills: z.array(z.string()).min(1, 'At least one skill is required'),
   requirements: z.array(z.string()).optional(),
   milestones: z.array(z.object({
     description: z.string().min(5, 'Milestone description required'),
-    amount: z.number().min(0.001, 'Amount must be at least 0.001 ETH'),
+    amount: z.number().min(0.001, 'Amount must be at least 0.001'),
     deadline: z.string().optional()
   })).min(1, 'At least one milestone is required'),
   useBlockchain: z.boolean(),
@@ -99,13 +100,14 @@ function CreateJobPageEnhanced() {
       description: '',
       budgetAmount: 0.001,
       budgetType: 'fixed',
-      currency: 'ETH',
+      currency: 'USD',
+      paymentMethod: 'card',
       duration: '',
       deadline: undefined,
       skills: [],
       requirements: [],
       milestones: [{ description: '', amount: 0.001 }],
-      useBlockchain: true,
+      useBlockchain: false,
       attachments: []
     }
   });
@@ -170,6 +172,8 @@ function CreateJobPageEnhanced() {
   // Restore local + fetch server draft (merge preference: latest updated field-level not implemented yet; naive override if server newer)
   useEffect(() => {
     if (restoredDraft) return;
+    // Wait for auth to settle before attempting server draft fetch
+    if (token === undefined) return;
     (async () => {
       let localWrapper: any = null;
       try { const raw = localStorage.getItem(draftKey); if (raw) localWrapper = JSON.parse(raw); } catch {}
@@ -610,7 +614,20 @@ function CreateJobPageEnhanced() {
 
   const canSubmit = isValid && isConnected && !!token && !ipfsUploading && !isSubmitting;
 
+  // Show loading state while auth is initializing to prevent fetch errors
+  if (token === undefined) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#00D9C0] via-[#F5E6E8] to-[#D1D5DB] flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-[#1E3A5F] border-r-transparent"></div>
+          <p className="mt-4 text-sm text-gray-700">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
+    <div className="min-h-screen bg-gradient-to-br from-[#00D9C0] via-[#F5E6E8] to-[#1E3A5F]">
     <PageContainer className="max-w-4xl">
       <Reveal>
         <SectionHeader
@@ -626,6 +643,7 @@ function CreateJobPageEnhanced() {
                 loading={savingDraft}
                 loadingText="Saving..."
                 size="sm"
+                className="!bg-teal-500 hover:!bg-teal-400 !text-white"
               >
                 <span className="inline-flex items-center gap-1">
                   <LazyIcon name="BookmarkSquareIcon" className="h-4 w-4" />
@@ -638,6 +656,7 @@ function CreateJobPageEnhanced() {
                 onClick={clearDraft}
                 disabled={isSubmitting}
                 size="sm"
+                className="!border-rose-200 !text-rose-500 hover:!bg-rose-50"
               >
                 <span className="inline-flex items-center gap-1">
                   <LazyIcon name="TrashIcon" className="h-4 w-4" />
@@ -650,13 +669,15 @@ function CreateJobPageEnhanced() {
                 onClick={onCancel}
                 disabled={isSubmitting}
                 size="sm"
+                className="!text-slate-500 hover:!bg-slate-100"
               >
                 Cancel
               </Button>
               {serverDraftId && (
                 <Button
                   type="button"
-                  variant="secondary"
+                  variant="gradient"
+                  className="!bg-[linear-gradient(90deg,#4338ca_0%,#7e22ce_50%,#c026d3_100%)] hover:!bg-[linear-gradient(90deg,#4f46e5_0%,#8b5cf6_50%,#d946ef_100%)]"
                   size="sm"
                   onClick={async () => {
                     if (!serverDraftId) return;
@@ -913,6 +934,50 @@ function CreateJobPageEnhanced() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Payment Method */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method *</label>
+              <div className="grid grid-cols-3 gap-3">
+                {(['crypto','card','qr'] as const).map(method => (
+                  <button
+                    key={method}
+                    type="button"
+                    onClick={() => {
+                      setValue('paymentMethod', method);
+                      if (method === 'crypto') {
+                        setValue('currency', 'ETH');
+                        setValue('useBlockchain', true);
+                      } else {
+                        setValue('currency', 'USD');
+                        setValue('useBlockchain', false);
+                      }
+                    }}
+                    className={`px-3 py-2 rounded border text-sm transition-colors flex flex-col items-center gap-1 ${watch('paymentMethod')===method ? 'bg-purple-600 text-white border-purple-600' : 'bg-white border-gray-300 hover:border-purple-400'}`}
+                  >
+                    <LazyIcon name={method==='crypto'?'CurrencyDollarIcon':method==='card'?'CreditCardIcon':'QrCodeIcon'} className="h-5 w-5" />
+                    <span className="capitalize">{method}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Currency */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Currency *</label>
+              <select
+                {...register('currency')}
+                disabled={watch('paymentMethod') === 'crypto'}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:bg-gray-50 disabled:cursor-not-allowed"
+              >
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="ETH">ETH (Ξ)</option>
+              </select>
+              {watch('paymentMethod') === 'crypto' && (
+                <p className="mt-1 text-xs text-gray-500">Crypto payments use ETH by default</p>
+              )}
+            </div>
+
             {/* Budget Type */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Budget Type *</label>
@@ -933,7 +998,7 @@ function CreateJobPageEnhanced() {
             {/* Budget Amount */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                {budgetType === 'fixed' ? 'Total Fixed Budget (ETH)' : 'Hourly Rate (ETH) *'}
+                {budgetType === 'fixed' ? `Total Fixed Budget (${watch('currency')})` : `Hourly Rate (${watch('currency')}) *`}
               </label>
               <input
                 type="number"
@@ -958,12 +1023,12 @@ function CreateJobPageEnhanced() {
                 <span className="font-semibold">{milestones.length}</span>
               </div>
               <div className="p-3 rounded border bg-gray-50 flex flex-col">
-                <span className="text-gray-500">Total (ETH)</span>
-                <span className="font-semibold">{totalMilestoneAmount.toFixed(3)}</span>
+                <span className="text-gray-500">Total ({watch('currency')})</span>
+                <span className="font-semibold">{totalMilestoneAmount.toFixed(watch('currency')==='ETH'?3:2)}</span>
               </div>
               <div className="p-3 rounded border bg-gray-50 flex flex-col">
-                <span className="text-gray-500">Budget Type</span>
-                <span className="font-semibold capitalize">{budgetType}</span>
+                <span className="text-gray-500">Payment</span>
+                <span className="font-semibold capitalize">{watch('paymentMethod')}</span>
               </div>
             </div>
           </CardContent>
@@ -1013,12 +1078,12 @@ function CreateJobPageEnhanced() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Amount (ETH) *
+                      Amount ({watch('currency')}) *
                     </label>
                     <input
                       type="number"
-                      step="0.001"
-                      min="0.001"
+                      step={watch('currency')==='ETH'?'0.001':'0.01'}
+                      min={watch('currency')==='ETH'?'0.001':'0.01'}
                       value={milestone.amount}
                       onChange={(e) => updateMilestone(index, 'amount', parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -1248,7 +1313,7 @@ function CreateJobPageEnhanced() {
             loadingText={ipfsUploading ? 'Uploading to IPFS...' : 'Creating Job...'}
             size="lg"
             variant="gradient"
-            className="flex-1"
+            className="flex-1 !bg-[linear-gradient(90deg,#4338ca_0%,#7e22ce_50%,#c026d3_100%)] hover:!bg-[linear-gradient(90deg,#4f46e5_0%,#8b5cf6_50%,#d946ef_100%)]"
           >
             <span className="inline-flex items-center gap-2">
               <LazyIcon name="RocketLaunchIcon" className="h-5 w-5" />
@@ -1262,6 +1327,7 @@ function CreateJobPageEnhanced() {
               variant="ghost"
               onClick={onCancel}
               disabled={isSubmitting}
+              className="!text-slate-500 hover:!bg-slate-100"
             >
               Cancel
             </Button>
@@ -1272,6 +1338,7 @@ function CreateJobPageEnhanced() {
               disabled={!token || savingDraft}
               loading={savingDraft}
               loadingText="Saving..."
+              className="!bg-teal-500 hover:!bg-teal-400 !text-white"
             >
               <span className="inline-flex items-center gap-1">
                 <LazyIcon name="BookmarkSquareIcon" className="h-4 w-4" />
@@ -1283,6 +1350,7 @@ function CreateJobPageEnhanced() {
               variant="outline"
               onClick={clearDraft}
               disabled={isSubmitting}
+              className="!border-rose-200 !text-rose-500 hover:!bg-rose-50"
             >
               <span className="inline-flex items-center gap-1">
                 <LazyIcon name="TrashIcon" className="h-4 w-4" />
@@ -1292,10 +1360,11 @@ function CreateJobPageEnhanced() {
             {serverDraftId && (
               <Button
                 type="button"
-                variant="secondary"
+                variant="gradient"
                 disabled={!token}
                 loading={isSubmitting}
                 loadingText="Publishing..."
+                className="!bg-[linear-gradient(90deg,#4338ca_0%,#7e22ce_50%,#c026d3_100%)] hover:!bg-[linear-gradient(90deg,#4f46e5_0%,#8b5cf6_50%,#d946ef_100%)]"
                 onClick={async () => {
                   if (!serverDraftId) return;
                   try {
@@ -1345,10 +1414,10 @@ function CreateJobPageEnhanced() {
                   <span className="h-2 w-2 rounded-full bg-purple-500 animate-pulse" /> Saving…
                 </span>
               )}
-              <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>Cancel</Button>
-              <Button type="button" variant="outline" onClick={saveDraftImmediate} disabled={!token || savingDraft} loading={savingDraft} loadingText="Saving...">Save Draft</Button>
-              <Button type="button" variant="outline" onClick={clearDraft} disabled={isSubmitting}>Clear Draft</Button>
-              <Button type="submit" onClick={handleSubmit(onSubmit)} disabled={!canSubmit} loading={isSubmitting} loadingText={ipfsUploading ? 'Uploading to IPFS…' : 'Creating Job…'} variant="gradient">
+              <Button type="button" variant="ghost" onClick={onCancel} disabled={isSubmitting} className="!text-slate-500 hover:!bg-slate-100">Cancel</Button>
+              <Button type="button" variant="secondary" onClick={saveDraftImmediate} disabled={!token || savingDraft} loading={savingDraft} loadingText="Saving..." className="!bg-teal-500 hover:!bg-teal-400 !text-white">Save Draft</Button>
+              <Button type="button" variant="outline" onClick={clearDraft} disabled={isSubmitting} className="!border-rose-200 !text-rose-500 hover:!bg-rose-50">Clear Draft</Button>
+              <Button type="submit" onClick={handleSubmit(onSubmit)} disabled={!canSubmit} loading={isSubmitting} loadingText={ipfsUploading ? 'Uploading to IPFS…' : 'Creating Job…'} variant="gradient" className="!bg-[linear-gradient(90deg,#4338ca_0%,#7e22ce_50%,#c026d3_100%)] hover:!bg-[linear-gradient(90deg,#4f46e5_0%,#8b5cf6_50%,#d946ef_100%)]">
                 Post Job
               </Button>
             </div>
@@ -1356,6 +1425,7 @@ function CreateJobPageEnhanced() {
         </div>
       )}
   </PageContainer>
+    </div>
   );
 }
 

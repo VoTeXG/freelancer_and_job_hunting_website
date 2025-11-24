@@ -55,7 +55,6 @@ export default function LoginPage() {
         setError(data.error || 'Login failed');
       } else {
         // Persist token and update global auth state immediately
-        try { if (data.token) localStorage.setItem('auth_token', data.token); } catch {}
         if (data.token) {
           setAuthToken(data.token);
         } else {

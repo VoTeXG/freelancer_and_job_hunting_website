@@ -41,12 +41,15 @@ export async function POST(req: NextRequest) {
       return withCommonHeaders(NextResponse.json({ success: false, error: 'Invalid payload', details: parsed.error.flatten() }, { status: 400 }));
     }
     const { emailOrUsername, password } = parsed.data;
+    const normalizedIdentifier = emailOrUsername.trim();
+    const normalizedEmail = normalizedIdentifier.toLowerCase();
 
     const user = await prisma.user.findFirst({
       where: {
         OR: [
-          { email: emailOrUsername.toLowerCase() },
-          { username: emailOrUsername },
+            { email: normalizedEmail },
+            { username: normalizedIdentifier },
+            { username: normalizedEmail },
         ],
       },
       select: {
@@ -56,6 +59,7 @@ export async function POST(req: NextRequest) {
         password: true,
         userType: true,
         walletAddress: true,
+          isVerified: true,
         profile: { select: { avatar: true, rating: true, completedJobs: true } },
       },
     });
@@ -64,12 +68,16 @@ export async function POST(req: NextRequest) {
       return withCommonHeaders(NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 }));
     }
 
+      if (!user.isVerified) {
+        return withCommonHeaders(NextResponse.json({ success: false, error: 'Account not verified yet' }, { status: 403 }));
+      }
+
     const valid = await comparePassword(password, user.password);
     if (!valid) {
       return withCommonHeaders(NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 }));
     }
 
-  const scopes = withAdminScope(defaultScopes(user.userType), user.walletAddress || (user.username.toLowerCase() === 'admin' ? undefined : undefined));
+    const scopes = withAdminScope(defaultScopes(user.userType), user.walletAddress);
   const token = generateAccessToken({ sub: user.id, usr: user.username, scope: scopes, typ: 'access' });
   const { raw: refreshRaw, expiresAt } = await issueRefreshToken(user.id, { userAgent: req.headers.get('user-agent') || undefined, ip });
 

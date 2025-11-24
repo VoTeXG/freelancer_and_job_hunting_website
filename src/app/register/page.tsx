@@ -42,7 +42,7 @@ export default function RegisterPage() {
       if (!res.ok || !data.success) {
         setError(data.error || 'Registration failed');
       } else {
-        try { if (data.token) localStorage.setItem('auth_token', data.token); } catch {}
+
         if (data.token) {
           setAuthToken(data.token);
         } else {
