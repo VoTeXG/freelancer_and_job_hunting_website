@@ -17,13 +17,16 @@ import { uploadJSONToIPFS, uploadToIPFS } from '@/lib/ipfs';
 import { LazyIcon } from '@/components/ui/LazyIcon';
 import { useAuth } from '@/providers/AuthProvider';
 import { useApiErrorHandlers } from '@/lib/queryClient';
-import { RichTextEditor } from '@/components/RichTextEditor';
 import Reveal from '@/components/Reveal';
 import { LineSkeleton } from '@/components/ui/SkeletonPresets';
+// Dynamically import RichTextEditor client-side only to prevent any SSR leakage
+const RichTextEditorLazy = dynamic(() => import('@/components/RichTextEditor').then(m => m.RichTextEditor), {
+  ssr: false,
+  loading: () => <LineSkeleton />
+});
 import { apiFetch } from '@/lib/utils';
 
-// Wrapper to ensure no SSR crash if component imported early (already client component, but keep future-proof)
-const RichTextEditorWrapper = (props: any) => <RichTextEditor {...props} />;
+// Wrapper removed; dynamic import handles client-only safety
 
 const jobSchema = z.object({
   title: z.string().min(10, 'Title must be at least 10 characters long'),
@@ -826,7 +829,7 @@ function CreateJobPageEnhanced() {
                   readOnly
                 />
                 {/* Lazy-load RichTextEditor to avoid SSR issues */}
-                <RichTextEditorWrapper
+                <RichTextEditorLazy
                   value={richDescription}
                   onChange={(html: string) => {
                     setRichDescription(html);

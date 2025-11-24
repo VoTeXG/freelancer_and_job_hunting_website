@@ -20,15 +20,22 @@ export async function POST(req: NextRequest) {
     if (!csrf.ok) {
       return withCommonHeaders(NextResponse.json({ success: false, error: csrf.reason || 'CSRF failed' }, { status: 403 }));
     }
-  const ct = ensureJson(req);
-  if (!ct.ok) return withCommonHeaders(NextResponse.json({ success: false, error: ct.reason }, { status: 415 }));
+    const ct = ensureJson(req);
+    if (!ct.ok) {
+      return withCommonHeaders(NextResponse.json({ success: false, error: ct.reason }, { status: 415 }));
+    }
     // Rate limit: 10 login attempts per 5 minutes per IP
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
     const rl = rateLimit({ key: `login:${ip}`, limit: 10, windowMs: 5 * 60 * 1000 });
     if (!rl.allowed) {
       return withCommonHeaders(NextResponse.json({ success: false, error: 'Too many attempts, try again later' }, { status: 429 }));
     }
-    const body = await req.json();
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return withCommonHeaders(NextResponse.json({ success: false, error: 'Invalid or empty JSON body' }, { status: 400 }));
+    }
     const parsed = LoginSchema.safeParse(body);
     if (!parsed.success) {
       return withCommonHeaders(NextResponse.json({ success: false, error: 'Invalid payload', details: parsed.error.flatten() }, { status: 400 }));

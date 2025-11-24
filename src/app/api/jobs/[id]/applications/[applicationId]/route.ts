@@ -3,6 +3,76 @@ import { prisma } from '@/lib/prisma';
 import { verifyCsrf, ensureJson } from '@/lib/security';
 import { verifyAccessToken } from '@/lib/auth';
 
+// GET /api/jobs/:id/applications/:applicationId -> fetch application detail
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string; applicationId: string }> }
+) {
+  try {
+    const { id: jobId, applicationId } = await params;
+    const application = await prisma.application.findFirst({
+      where: { id: applicationId, jobId },
+      select: {
+        id: true,
+        coverLetter: true,
+        proposedRate: true,
+        estimatedDuration: true,
+        portfolio: true,
+        status: true,
+        appliedAt: true,
+        job: {
+          select: {
+            id: true,
+            title: true,
+            budgetAmount: true,
+            budgetType: true,
+            currency: true,
+            duration: true,
+            status: true,
+            client: {
+              select: {
+                id: true,
+                username: true,
+              },
+            },
+          },
+        },
+        freelancer: {
+          select: {
+            id: true,
+            username: true,
+            walletAddress: true,
+            profile: {
+              select: {
+                skills: true,
+                hourlyRate: true,
+                rating: true,
+                completedJobs: true,
+                totalEarnings: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!application) {
+      return NextResponse.json(
+        { success: false, error: 'Application not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, application });
+  } catch (error) {
+    console.error('Application fetch error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
 // Accept or reject an application for a job (client-only)
 export async function PATCH(
   request: NextRequest,

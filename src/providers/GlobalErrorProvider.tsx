@@ -47,6 +47,24 @@ export function GlobalErrorProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
+  // Capture uncaught errors and unhandled promise rejections to surface them in UI
+  useEffect(() => {
+    const onError = (ev: ErrorEvent) => {
+      showError({ title: 'Runtime Error', message: ev?.error?.message || ev?.message || 'Unknown client error', variant: 'error' });
+    };
+    const onRejection = (ev: PromiseRejectionEvent) => {
+      const reason: any = ev?.reason;
+      const msg = (reason && (reason.message || String(reason))) || 'Unhandled promise rejection';
+      showError({ title: 'Unhandled Promise Rejection', message: msg, variant: 'error' });
+    };
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection as any);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection as any);
+    };
+  }, [showError]);
+
   const value = useMemo(() => ({ error, showError, clearError }), [error, showError, clearError]);
 
   return (

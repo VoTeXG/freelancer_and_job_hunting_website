@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -10,6 +11,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { useApiErrorHandlers } from '@/lib/queryClient';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Reveal from '@/components/Reveal';
+import ApplicationPreviewModal from '@/components/ApplicationPreviewModal';
 
 const JobApplicationModal = dynamic(
   () => import('@/components/JobApplicationModal'),
@@ -29,10 +31,18 @@ export default function JobDetailPage() {
   const { token, user } = useAuth();
   const { toastSuccess, toastError, bannerError } = useApiErrorHandlers();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [previewApplication, setPreviewApplication] = useState<any | null>(null);
 
   useEffect(() => {
     fetchJob();
   }, [jobId]);
+
+  useEffect(() => {
+    if (!previewApplication) return;
+    if (!job?.applications?.some((app: any) => app.id === previewApplication.id)) {
+      setPreviewApplication(null);
+    }
+  }, [job, previewApplication]);
 
   const fetchJob = async () => {
     try {
@@ -84,6 +94,30 @@ export default function JobDetailPage() {
     if (!user || !job?.applications) return null;
     return job.applications.find((a: any) => a.freelancer?.id === user.id) || null;
   }, [user, job]);
+
+  const jobForModal = useMemo(() => {
+    if (!job) {
+      return null;
+    }
+
+    return {
+      ...job,
+      budget: {
+        amount: job.budgetAmount,
+        currency: job.currency,
+        type: String(job.budgetType || '').toLowerCase(),
+      },
+    };
+  }, [job]);
+
+  const isJobOwner = Boolean(user?.id && job?.client?.id && user.id === job.client.id);
+
+  const applications = useMemo(() => {
+    if (!job?.applications) {
+      return [] as any[];
+    }
+    return job.applications as any[];
+  }, [job]);
 
   const openEditModal = () => {
     setIsEditing(true);
@@ -189,14 +223,6 @@ export default function JobDetailPage() {
   const isOpenStatus = String(job.status || '').toUpperCase() === 'OPEN';
   const applicantsCount = Array.isArray(job.applications) ? job.applications.length : (job.applicants?.length || 0);
   const client = job.client || job.clientId || {};
-  const jobForModal = useMemo(() => ({
-    ...job,
-    budget: {
-      amount: job.budgetAmount,
-      currency: job.currency,
-      type: String(job.budgetType || '').toLowerCase(),
-    },
-  }), [job]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -206,7 +232,7 @@ export default function JobDetailPage() {
         onClose={() => { setShowApplicationModal(false); setIsEditing(false); }}
         onSubmit={isEditing ? handleEdit : handleApply}
         isSubmitting={isApplying}
-        job={jobForModal}
+        job={jobForModal ?? undefined}
         mode={isEditing ? 'edit' : 'apply'}
         initialValues={isEditing && myApplication ? {
           coverLetter: myApplication.coverLetter,
@@ -214,6 +240,13 @@ export default function JobDetailPage() {
           estimatedDuration: myApplication.estimatedDuration,
           portfolio: myApplication.portfolio || '',
         } : undefined}
+      />
+
+      <ApplicationPreviewModal
+        isOpen={Boolean(previewApplication)}
+        onClose={() => setPreviewApplication(null)}
+        application={previewApplication}
+        job={job}
       />
 
       {/* Header */}
@@ -288,6 +321,101 @@ export default function JobDetailPage() {
             </CardContent>
           </Card>
           </Reveal>
+
+          {isJobOwner && (
+            <Reveal delay={200}>
+            <Card hoverable glass>
+              <CardHeader>
+                <CardTitle>Applications</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {applications.length === 0 ? (
+                  <p className="text-sm text-gray-600">No applications yet. Invite freelancers or share this job to attract proposals.</p>
+                ) : (
+                  applications.map((application: any) => {
+                    const status = String(application.status || '').toUpperCase();
+                    const statusClass = status === 'ACCEPTED'
+                      ? 'bg-green-100 text-green-700'
+                      : status === 'REJECTED'
+                      ? 'bg-red-100 text-red-700'
+                      : status === 'WITHDRAWN'
+                      ? 'bg-gray-200 text-gray-700'
+                      : 'bg-blue-100 text-blue-700';
+                    return (
+                      <div key={application.id} className="rounded-lg border border-gray-200 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <p className="font-medium text-gray-900 break-words">{application.freelancer?.username ?? 'Unknown freelancer'}</p>
+                            <p className="mt-1 text-sm text-gray-600 break-words">
+                              {Array.isArray(application.freelancer?.profile?.skills) && application.freelancer.profile.skills.length > 0
+                                ? application.freelancer.profile.skills.slice(0, 5).join(', ')
+                                : 'No skills listed'}
+                            </p>
+                          </div>
+                          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${statusClass}`}>
+                            {status}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-4 text-sm text-gray-600">
+                          <span className="flex items-center gap-1">
+                            <LazyIcon name="CurrencyDollarIcon" className="h-4 w-4" />
+                            ${application.proposedRate?.toLocaleString?.() ?? application.proposedRate}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <LazyIcon name="ClockIcon" className="h-4 w-4" />
+                            {application.estimatedDuration || 'No duration provided'}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <LazyIcon name="CalendarIcon" className="h-4 w-4" />
+                            Applied {application.appliedAt ? timeAgo(application.appliedAt) : 'recently'}
+                          </span>
+                        </div>
+
+                        {application.coverLetter && (
+                          <p className="mt-3 text-sm text-gray-600 whitespace-pre-line max-h-48 overflow-hidden">
+                            {application.coverLetter}
+                          </p>
+                        )}
+
+                        {application.portfolio && (
+                          <div className="mt-3 text-sm">
+                            <a
+                              href={application.portfolio}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700"
+                            >
+                              <LazyIcon name="ArrowTopRightOnSquareIcon" className="h-4 w-4" />
+                              Portfolio
+                            </a>
+                          </div>
+                        )}
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPreviewApplication(application)}
+                          >
+                            <LazyIcon name="EyeIcon" className="h-4 w-4 mr-1" />
+                            Quick Preview
+                          </Button>
+                          <Button size="sm" asChild>
+                            <Link href={`/jobs/${job.id}/applications/${application.id}`}>
+                              <LazyIcon name="DocumentMagnifyingGlassIcon" className="h-4 w-4 mr-1" />
+                              Open Full View
+                            </Link>
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
+            </Reveal>
+          )}
         </div>
 
         {/* Sidebar */}

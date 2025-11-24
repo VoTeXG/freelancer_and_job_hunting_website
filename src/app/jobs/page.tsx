@@ -1,10 +1,9 @@
 'use client';
-
-export const dynamic = 'force-dynamic';
+// Removed force-dynamic; allow Next to supply initial searchParams normally to avoid edge cases.
 
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import dynamicImport from 'next/dynamic';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/providers/AuthProvider';
 import { useApplyToJob } from '@/hooks/useApplyToJob';
 import JobListing from '@/components/JobListing';
@@ -54,7 +53,9 @@ function JobsPageInner() {
   const [minBudget, setMinBudget] = useState<string>('');
   const [maxBudget, setMaxBudget] = useState<string>('');
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const searchParams = useSearchParams();
+  // We avoid useSearchParams hook due to intermittent Next.js dev runtime bug producing undefined.
+  // Instead, we parse window.location.search after mount and keep local state.
+  const [initialParams, setInitialParams] = useState<URLSearchParams | null>(null);
   const router = useRouter();
   const initialized = useRef(false);
   const pageSize = 10;
@@ -63,7 +64,9 @@ function JobsPageInner() {
   // Initialize from URL
   useEffect(() => {
     if (initialized.current) return;
-    const sp = searchParams; if (!sp) return;
+    if (typeof window === 'undefined') return;
+    const sp = initialParams || new URLSearchParams(window.location.search || '');
+    setInitialParams(sp);
     const q = sp.get('search'); if (q) setSearchTerm(q);
     const bf = sp.get('budgetType'); if (bf && (bf === 'fixed' || bf === 'hourly')) setBudgetFilter(bf as any);
     const sk = sp.get('skills'); if (sk) setSelectedSkills(sk.split(','));
@@ -72,7 +75,7 @@ function JobsPageInner() {
     const minB = sp.get('minBudget'); if (minB) setMinBudget(minB);
     const maxB = sp.get('maxBudget'); if (maxB) setMaxBudget(maxB);
     initialized.current = true;
-  }, [searchParams]);
+  }, [initialParams]);
 
   // Debounce search
   const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
@@ -82,6 +85,7 @@ function JobsPageInner() {
   }, [searchTerm]);
 
   // Fetch jobs
+  const previousQueryRef = useRef<string>('');
   useEffect(() => {
     if (!initialized.current) return;
     const controller = new AbortController();
@@ -94,7 +98,11 @@ function JobsPageInner() {
     if (sortBy !== 'recent') params.set('sort', sortBy);
     if (minBudget) params.set('minBudget', minBudget);
     if (maxBudget) params.set('maxBudget', maxBudget);
-    router.replace(`/jobs?${params.toString()}`);
+    const nextQuery = params.toString();
+    if (previousQueryRef.current !== nextQuery) {
+      previousQueryRef.current = nextQuery;
+      router.replace(`/jobs?${nextQuery}`);
+    }
     const load = async () => {
       setLoading(true); setError(null);
       try {
@@ -306,10 +314,7 @@ function JobsPageInner() {
 }
 
 export default function JobsPage() {
-  return (
-    <Suspense fallback={<div className="p-6 text-gray-500">Loading jobs…</div>}>
-      <JobsPageInner />
-    </Suspense>
-  );
+  // Suspense wrapper removed to avoid Next dev searchParams race causing undefined.
+  return <JobsPageInner />;
 }
         

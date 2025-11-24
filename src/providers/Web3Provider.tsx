@@ -21,9 +21,12 @@ const transports = Object.fromEntries(CHAINS.map((c) => [c.id, http()])) as any;
 
 const appOrigin = process.env.NEXT_PUBLIC_APP_ORIGIN || 'http://localhost:3000';
 
+// Allow disabling Coinbase connector if its telemetry causes noisy errors in dev.
+const coinbaseDisabled = (process.env.NEXT_PUBLIC_DISABLE_COINBASE || '') === '1';
+
 const connectors = [
   injected({ shimDisconnect: true }),
-  coinbaseWallet({ appName: 'CareerBridge' }),
+  ...(!coinbaseDisabled ? [coinbaseWallet({ appName: 'CareerBridge' })] : []),
   ...(hasWalletConnect
     ? [
         walletConnect({

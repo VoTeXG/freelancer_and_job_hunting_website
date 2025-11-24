@@ -16,16 +16,16 @@ const nextConfig: NextConfig = {
   /* Add config customizations here if needed */
   reactStrictMode: true,
   poweredByHeader: false,
-  eslint: {
-    // Keep lint in CI via separate step; don’t fail production builds due to lint errors
-    ignoreDuringBuilds: true,
-  },
+  // eslint config in next.config is deprecated in Next 16; keep linting in CI instead
   webpack: (config) => {
     // Some libs optionally require pino-pretty in browser bundle; alias to false to avoid module not found
     config.resolve = config.resolve || {} as any;
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
       'pino-pretty': false,
+      // Suppress optional MetaMask SDK React Native async-storage dependency in web build
+      '@react-native-async-storage/async-storage': false,
+      '@metamask/sdk': false,
     } as any;
     return config;
   },
@@ -36,6 +36,8 @@ const nextConfig: NextConfig = {
     deviceSizes: [360, 414, 640, 768, 1024, 1280, 1536, 1920],
     imageSizes: [16, 24, 32, 48, 64, 96, 128, 256],
   },
+  // Allow LAN dev origin to suppress cross-origin dev warning
+  allowedDevOrigins: [ 'http://localhost:3000', 'http://192.168.56.1:3000' ],
   async headers() {
     return [
       {
@@ -74,7 +76,8 @@ const nextConfig: NextConfig = {
         ]
       }
     ];
-  }
+  },
+  // Removed invalid experimental.turbo flag (Next.js 16 uses Turbopack by default; opt-out removed).
 };
 
 const baseConfig = withBundleAnalyzer(nextConfig);

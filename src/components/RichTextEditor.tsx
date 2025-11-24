@@ -1,6 +1,5 @@
 "use client";
-import React, { useEffect, useMemo, useRef } from 'react';
-import Quill from 'quill';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { sanitizeRichTextHTML } from '@/lib/sanitize';
 
 export interface RichTextEditorProps {
@@ -46,6 +45,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   className,
   minHeight = 220,
 }) => {
+  // Defer loading Quill until after mount to avoid any SSR edge cases and reduce initial bundle
+  // Holds the Quill constructor once dynamically loaded
+  const [QuillCtor, setQuillCtor] = useState<any | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   // Wrapper that will contain both toolbar and editor (we manage all children)
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   // Host element passed to Quill; created dynamically so toolbar stays within wrapper
@@ -54,9 +57,37 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const lastEmittedHtmlRef = useRef<string>("");
   const modules = useMemo(() => modulesBase, []);
 
+  // Dynamically import Quill client-side only
+  useEffect(() => {
+    let active = true;
+    if (!QuillCtor) {
+      import('quill')
+        .then((mod) => {
+          if (!active) return;
+          // Support various export styles: default, named Quill, or module itself
+          const ctor = (mod && (mod as any).default) || (mod as any).Quill || mod;
+          // Rudimentary guard: ensure it's constructable
+          if (typeof ctor === 'function') {
+            setQuillCtor(() => ctor);
+          } else {
+            setLoadError('Editor library failed to load (invalid export)');
+          }
+        })
+        .catch((err) => {
+          if (!active) return;
+          setLoadError('Editor failed to load');
+          // eslint-disable-next-line no-console
+          console.warn('Quill dynamic import failed:', err);
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [QuillCtor]);
+
   // Initialize Quill once
   useEffect(() => {
-    if (!wrapperRef.current || quillRef.current) return;
+    if (!wrapperRef.current || quillRef.current || !QuillCtor) return;
 
     // Ensure the wrapper is clean before initializing (Strict Mode, HMR)
     try { wrapperRef.current.innerHTML = ''; } catch {}
@@ -66,13 +97,21 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     hostRef.current = host;
     wrapperRef.current.appendChild(host);
 
-    const q = new Quill(host, {
+    let q: any;
+    try {
+      q = new (QuillCtor as any)(host, {
       theme: "snow",
       modules,
       readOnly,
       placeholder,
       formats,
     });
+    } catch (e) {
+      setLoadError('Editor init error');
+      // eslint-disable-next-line no-console
+      console.error('Quill init failed:', e);
+      return;
+    }
     quillRef.current = q;
 
     // Wire change handler
@@ -105,12 +144,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       try { if (wrapperRef.current) wrapperRef.current.innerHTML = ''; } catch {}
       hostRef.current = null;
     };
-  }, [modules, minHeight]);
+  }, [modules, minHeight, QuillCtor, readOnly, placeholder]);
 
   // Sync external value changes
   useEffect(() => {
     const q = quillRef.current;
-    if (!q) return;
+    if (!q || !QuillCtor) return;
     const currentHtml = (q.root as HTMLDivElement).innerHTML;
     const next = sanitizeRichTextHTML(value || "");
     if (next !== currentHtml) {
@@ -129,14 +168,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   // Toggle readOnly dynamically
   useEffect(() => {
     const q = quillRef.current;
-    if (!q) return;
+    if (!q || !QuillCtor) return;
     q.enable(!readOnly);
   }, [readOnly]);
 
   // Update placeholder dynamically
   useEffect(() => {
     const q = quillRef.current;
-    if (!q) return;
+    if (!q || !QuillCtor) return;
     const root = q.root as HTMLDivElement;
     if (placeholder) {
       root.setAttribute('data-placeholder', placeholder);
@@ -146,7 +185,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   }, [placeholder]);
 
   return (
-    <div className={className} ref={wrapperRef} />
+    <div className={className} ref={wrapperRef}>
+      {!QuillCtor && !loadError && (
+        <div className="animate-pulse text-sm text-[var(--text-secondary)]">Loading editor...</div>
+      )}
+      {loadError && (
+        <div className="text-xs text-red-500">{loadError}</div>
+      )}
+    </div>
   );
 };
 

@@ -6,8 +6,11 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { LazyIcon } from '@/components/ui/LazyIcon';
 import Reveal from '@/components/Reveal';
+import { useEffect } from 'react';
 
 export default function Home() {
+  // Diagnostics: simple mount log; remove when stable.
+  useEffect(() => { if (process.env.NODE_ENV === 'development') console.log('[Home] mount'); }, []);
   const features = [
     {
       icon: (props:any) => <LazyIcon name="ShieldCheckIcon" {...props} />,

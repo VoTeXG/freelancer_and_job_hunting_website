@@ -13,9 +13,17 @@ export async function POST(request: NextRequest) {
     if (!csrf.ok) {
       return withCommonHeaders(NextResponse.json({ success: false, error: csrf.reason || 'CSRF failed' }, { status: 403 }));
     }
-  const ct = ensureJson(request);
-  if (!ct.ok) return withCommonHeaders(NextResponse.json({ success: false, error: ct.reason }, { status: 415 }));
-    const { address, message, signature } = await request.json();
+    const ct = ensureJson(request);
+    if (!ct.ok) {
+      return withCommonHeaders(NextResponse.json({ success: false, error: ct.reason }, { status: 415 }));
+    }
+    let parsedBody: any;
+    try {
+      parsedBody = await request.json();
+    } catch {
+      return withCommonHeaders(NextResponse.json({ success: false, error: 'Invalid or empty JSON body' }, { status: 400 }));
+    }
+    const { address, message, signature } = parsedBody || {};
 
     if (!address || !message || !signature) {
       return NextResponse.json(

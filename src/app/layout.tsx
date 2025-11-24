@@ -5,6 +5,7 @@ import '@rainbow-me/rainbowkit/styles.css';
 import 'quill/dist/quill.snow.css';
 import ClientProviders from './ClientProviders';
 import PageTransition from '@/components/PageTransition';
+import GlobalErrorBoundary from '@/components/GlobalErrorBoundary';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,14 +33,16 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-svh text-[var(--text-primary)]`}
       >
-        <ClientProviders>
-          {/* Landmark roles */}
-          <div role="main" id="main-content">
-            <PageTransition>
-              {children}
-            </PageTransition>
-          </div>
-        </ClientProviders>
+        <GlobalErrorBoundary>
+          <ClientProviders>
+            {/* Landmark roles */}
+            <div role="main" id="main-content">
+              <PageTransition>
+                {children}
+              </PageTransition>
+            </div>
+          </ClientProviders>
+        </GlobalErrorBoundary>
       </body>
     </html>
   );

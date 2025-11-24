@@ -14,7 +14,7 @@ const allowed = new Set([
   'BriefcaseIcon', 'ShieldCheckIcon', 'CurrencyDollarIcon', 'TrophyIcon', 'BellIcon', 'CheckIcon', 'XMarkIcon', 'TrashIcon', 'UserGroupIcon', 'ChartBarIcon', 'ClockIcon', 'StarIcon', 'PlusIcon', 'EyeIcon',
   'MapPinIcon', 'CalendarIcon', 'Bars3Icon', 'UserCircleIcon', 'ChevronDownIcon', 'MagnifyingGlassIcon', 'DocumentIcon', 'PaperAirplaneIcon', 'CheckBadgeIcon', 'WalletIcon', 'AcademicCapIcon', 'GlobeAltIcon', 'PencilIcon', 'UserIcon',
   'ArrowTrendingUpIcon', 'ArrowTrendingDownIcon', 'CreditCardIcon', 'PaperClipIcon', 'FaceSmileIcon', 'PhoneIcon', 'VideoCameraIcon', 'AdjustmentsHorizontalIcon', 'FunnelIcon', 'CloudArrowUpIcon',
-  'ChatBubbleLeftRightIcon', 'ArrowsRightLeftIcon', 'CheckCircleIcon', 'ExclamationTriangleIcon', 'DocumentTextIcon',
+  'ChatBubbleLeftRightIcon', 'ArrowsRightLeftIcon', 'CheckCircleIcon', 'ExclamationTriangleIcon', 'DocumentTextIcon', 'ArrowTopRightOnSquareIcon', 'DocumentMagnifyingGlassIcon',
   'SparklesIcon', 'BoltIcon', 'IdentificationIcon', 'RocketLaunchIcon'
 ]);
 
