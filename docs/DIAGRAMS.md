@@ -7,9 +7,9 @@ This document captures the core data flows and components of the platform using 
 ```mermaid
 flowchart LR
   subgraph Client
-    A[Next.js App Router (React 19 + Tailwind)]
-    B[RainbowKit/wagmi Wallet Auth]
-    C[RichTextEditor (react-quill)]
+    A[Next.js App Router]
+    B[RainbowKit / wagmi]
+    C[Rich text editor]
   end
 
   subgraph API
