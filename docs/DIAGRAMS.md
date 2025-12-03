@@ -13,7 +13,7 @@ flowchart LR
   end
 
   subgraph API
-    D[/Route Handlers (src/app/api) Zod, CSRF, JWT/Scopes/]
+    D[/Route Handlers (src/app/api)/]
     E[Sanitization (sanitize-html)]
     F[Rate Limit]
     G[ServerTiming + Metrics]
