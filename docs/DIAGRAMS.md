@@ -13,7 +13,7 @@ flowchart LR
   end
 
   subgraph API
-    D[/Route Handlers (src/app/api)/]
+    D[Route Handlers (src app api)]
     E[Sanitization (sanitize-html)]
     F[Rate Limit]
     G[ServerTiming + Metrics]
@@ -41,8 +41,8 @@ flowchart LR
 ```mermaid
 sequenceDiagram
   participant U as User (Client)
-  participant FE as Next.js Page - /jobs/create-enhanced
-  participant API as POST /api/jobs
+  participant FE as Next.js Page - jobs create-enhanced
+  participant API as POST api jobs
   participant SEC as CSRF + JWT + RateLimit
   participant SAN as sanitizeRichTextHTML
   participant DB as Prisma/Postgres
@@ -65,7 +65,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant FE as Next.js Page - /jobs
-  participant API as GET /api/jobs
+  participant API as GET api jobs
   participant MET as ServerTiming + Metrics
   participant CACHE as cacheJSON("jobs", key)
   participant DB as Prisma/Postgres
@@ -140,7 +140,7 @@ erDiagram
 ```mermaid
 sequenceDiagram
   participant CLI as Client Dashboard
-  participant API as POST /api/jobs/:id/escrow\n(or server worker)
+  participant API as POST api jobs id escrow (or worker)
   participant CHN as Ethereum
   participant DB as Postgres
 
@@ -179,11 +179,11 @@ flowchart LR
     end
 
     subgraph API[API Route Handlers (app/api/*)]
-      AuthAPI[/Auth Routes (login, register, SIWE)/]
-      JobsAPI[/Jobs Routes (create, list, update)/]
-      FreelancersAPI[/Freelancers Routes (search, filters)/]
-      EscrowAPI[/Escrow Routes (create, release, cancel)/]
-      ProfileAPI[/Profile Routes (profiles & settings)/]
+        AuthAPI[Auth Routes (login, register, SIWE)]
+        JobsAPI[Jobs Routes (create, list, update)]
+        FreelancersAPI[Freelancers Routes (search, filters)]
+        EscrowAPI[Escrow Routes (create, release, cancel)]
+        ProfileAPI[Profile Routes (profiles & settings)]
     end
 
     subgraph Backend[Backend Services]
@@ -211,7 +211,7 @@ flowchart LR
       Checks[[Checks: perf & a11y scripts]]
     end
 
-    Client -->|"HTTP (fetch, navigation)"| API
+    Client -->|HTTP fetch navigation| API
     UI --> Providers
 
     AuthAPI --> Users
@@ -247,10 +247,10 @@ flowchart LR
 sequenceDiagram
     autonumber
     actor ClientUser as Client (Browser)
-    participant NextPage as Next.js Page\\n/jobs/create-enhanced
-    participant AuthProv as AuthProvider\\n(wallet/SIWE)
-    participant JobsAPI as /api/jobs
-    participant EscrowAPI as /api/escrow
+  participant NextPage as Next.js Page jobs create-enhanced
+  participant AuthProv as AuthProvider wallet SIWE
+  participant JobsAPI as api jobs
+  participant EscrowAPI as api escrow
     participant Prisma as Prisma + PostgreSQL
     participant EscrowSC as FreelancerEscrow.sol\\n(Ethereum)
 
