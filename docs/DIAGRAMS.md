@@ -13,17 +13,17 @@ flowchart LR
   end
 
   subgraph API
-    D[Route Handlers (src app api)]
-    E[Sanitization (sanitize-html)]
-    F[Rate Limit]
-    G[ServerTiming + Metrics]
+    D[API routes]
+    E[Sanitization]
+    F[Rate limiting]
+    G[Metrics]
   end
 
   subgraph Services
-    H[Prisma + PostgreSQL]
-    I[(Cache Layer: Redis or In-memory)]
+    H[Database]
+    I[Cache]
     J[IPFS]
-    K[Ethereum Escrow/Rep/NFT]
+    K[Blockchain]
   end
 
   A -->|fetch| D
