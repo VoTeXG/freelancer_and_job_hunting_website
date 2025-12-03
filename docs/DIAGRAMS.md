@@ -64,7 +64,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-  participant FE as Next.js Page - /jobs
+  participant FE as Next.js Page - jobs
   participant API as GET api jobs
   participant MET as ServerTiming + Metrics
   participant CACHE as cacheJSON("jobs", key)
@@ -115,7 +115,7 @@ erDiagram
     string title
     string description(HTML)
     float budgetAmount
-    enum budgetType(FIXED|HOURLY)
+    string budgetType (FIXED or HOURLY)
     string currency
     string[] skills
     datetime createdAt
@@ -252,7 +252,7 @@ sequenceDiagram
   participant JobsAPI as api jobs
   participant EscrowAPI as api escrow
     participant Prisma as Prisma + PostgreSQL
-    participant EscrowSC as FreelancerEscrow.sol\\n(Ethereum)
+    participant EscrowSC as FreelancerEscrow.sol (Ethereum)
 
     ClientUser->>NextPage: Open Post Job (create-enhanced)
     NextPage->>AuthProv: Initialize auth (wallet / SIWE)
@@ -321,7 +321,7 @@ flowchart LR
     F[Freelancer FE]
   end
   subgraph Server
-    API[/API: disputes endpoints/]
+    API[API disputes endpoints]
     DB[(Postgres)]
   end
   subgraph Chain
