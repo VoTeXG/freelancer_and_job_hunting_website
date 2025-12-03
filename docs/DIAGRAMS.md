@@ -7,23 +7,23 @@ This document captures the core data flows and components of the platform using 
 ```mermaid
 flowchart LR
   subgraph Client
-    A[Next.js App Router\nReact 19 + Tailwind]
-    B[RainbowKit/wagmi\nWallet Auth]
-    C[RichTextEditor\nreact-quill]
+    A[Next.js App Router (React 19 + Tailwind)]
+    B[RainbowKit/wagmi Wallet Auth]
+    C[RichTextEditor (react-quill)]
   end
 
   subgraph API
-    D[/Route Handlers\n(src/app/api)\nZod, CSRF, JWT/Scopes/]
-    E[Sanitization\n(sanitize-html)]
+    D[/Route Handlers (src/app/api) Zod, CSRF, JWT/Scopes/]
+    E[Sanitization (sanitize-html)]
     F[Rate Limit]
-    G[ServerTiming\n+ Metrics]
+    G[ServerTiming + Metrics]
   end
 
   subgraph Services
-    H[Prisma\nPostgreSQL]
-    I[(Cache Layer)\nRedis | In-memory]
+    H[Prisma + PostgreSQL]
+    I[(Cache Layer: Redis or In-memory)]
     J[IPFS]
-    K[Ethereum\nEscrow/Rep/NFT]
+    K[Ethereum Escrow/Rep/NFT]
   end
 
   A -->|fetch| D
@@ -41,7 +41,7 @@ flowchart LR
 ```mermaid
 sequenceDiagram
   participant U as User (Client)
-  participant FE as Next.js Page\n/jobs/create-enhanced
+  participant FE as Next.js Page - /jobs/create-enhanced
   participant API as POST /api/jobs
   participant SEC as CSRF + JWT + RateLimit
   participant SAN as sanitizeRichTextHTML
@@ -64,7 +64,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-  participant FE as Next.js Page\n/jobs
+  participant FE as Next.js Page - /jobs
   participant API as GET /api/jobs
   participant MET as ServerTiming + Metrics
   participant CACHE as cacheJSON("jobs", key)
@@ -158,16 +158,124 @@ flowchart TB
   A[Incoming Request] --> B[withLatency wrapper]
   B --> C[Route Handler]
   C --> D[ServerTiming measurements]
-  C --> E[Cache events\n(hit/miss/version)]
-  C --> F[App events\n(success/error)]
+  C --> E[Cache events (hit/miss/version)]
+  C --> F[App events (success/error)]
   D --> G[Server-Timing header]
-  E --> H[Metrics UI\nAdmin Dashboard]
+  E --> H[Metrics UI / Admin Dashboard]
   F --> H
 ```
 
 ---
 
 Tip: These Mermaid blocks render directly in many viewers (including GitHub). If you want PNGs/SVGs for docs, we can export them or generate an SVG assets folder.
+
+## 7) System architecture (expanded overview)
+
+```mermaid
+flowchart LR
+    subgraph Client[Client (Next.js App Router)]
+      UI[Pages & Components: jobs, freelancers, auth, dashboard]
+      Providers[Client Providers: AuthProvider, Query Client, Theme]
+    end
+
+    subgraph API[API Route Handlers (app/api/*)]
+      AuthAPI[/Auth Routes (login, register, SIWE)/]
+      JobsAPI[/Jobs Routes (create, list, update)/]
+      FreelancersAPI[/Freelancers Routes (search, filters)/]
+      EscrowAPI[/Escrow Routes (create, release, cancel)/]
+      ProfileAPI[/Profile Routes (profiles & settings)/]
+    end
+
+    subgraph Backend[Backend Services]
+      subgraph DB[PostgreSQL via Prisma]
+        Users[(User)]
+        Profiles[(Profile)]
+        Jobs[(Job)]
+        Apps[(Application)]
+        Escrows[(Escrow)]
+        Reputation[(ReputationEvent)]
+        Certs[(Certificate)]
+      end
+
+      subgraph Chain[Ethereum / Web3]
+        EscrowSC[[FreelancerEscrow.sol]]
+        ReputationSC[[ReputationSystem.sol]]
+        CertNFT[[CertificateNFT.sol]]
+      end
+    end
+
+    subgraph Ops[Ops / Tooling]
+      Seeds[[Seeding Scripts: seed-admin.ts, seed-sample.ts]]
+      Migrations[[Migrations: prisma/migrations]]
+      Tests[[Tests: contracts + Playwright e2e]]
+      Checks[[Checks: perf & a11y scripts]]
+    end
+
+    Client -->|"HTTP (fetch, navigation)"| API
+    UI --> Providers
+
+    AuthAPI --> Users
+    AuthAPI --> Profiles
+
+    JobsAPI --> Jobs
+    JobsAPI --> Users
+    JobsAPI --> Profiles
+
+    FreelancersAPI --> Profiles
+    FreelancersAPI --> Users
+
+    ProfileAPI --> Profiles
+
+    EscrowAPI --> Escrows
+    EscrowAPI --> Jobs
+    EscrowAPI --> Users
+    EscrowAPI -->|"Ethers.js calls"| EscrowSC
+    EscrowAPI -->|"Ethers.js calls"| ReputationSC
+    EscrowAPI -->|"Ethers.js calls"| CertNFT
+
+    Seeds --> DB
+    Migrations --> DB
+    Tests --> DB
+    Tests --> Chain
+    Checks --> Client
+    Checks --> API
+```
+
+## 8) Post Job + Escrow flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor ClientUser as Client (Browser)
+    participant NextPage as Next.js Page\\n/jobs/create-enhanced
+    participant AuthProv as AuthProvider\\n(wallet/SIWE)
+    participant JobsAPI as /api/jobs
+    participant EscrowAPI as /api/escrow
+    participant Prisma as Prisma + PostgreSQL
+    participant EscrowSC as FreelancerEscrow.sol\\n(Ethereum)
+
+    ClientUser->>NextPage: Open Post Job (create-enhanced)
+    NextPage->>AuthProv: Initialize auth (wallet / SIWE)
+    AuthProv-->>NextPage: Auth state + token
+
+    ClientUser->>NextPage: Fill job form + escrow options
+    ClientUser->>NextPage: Click "Create job"
+
+    NextPage->>JobsAPI: POST /api/jobs (job data, clientId, budget)
+    JobsAPI->>Prisma: Create Job record
+    Prisma-->>JobsAPI: Job created (jobId)
+    JobsAPI-->>NextPage: 201 Created (jobId, summary)
+
+    NextPage->>EscrowAPI: POST /api/escrow (jobId, terms, amount)
+    EscrowAPI->>Prisma: Create Escrow record (pending)
+    EscrowAPI->>EscrowSC: call createEscrow(jobId, amount, client wallet)
+    EscrowSC-->>EscrowAPI: Tx receipt (escrowId, status)
+
+    EscrowAPI->>Prisma: Update Escrow record with on-chain escrowId & status
+    EscrowAPI-->>NextPage: Escrow created (escrowId, status)
+
+    NextPage-->>ClientUser: Show success, redirect to job/escrow detail
+```
 
 ## 7) Applicant workflow (apply → shortlist → award → fund escrow)
 
@@ -218,7 +326,7 @@ flowchart LR
   end
   subgraph Chain
     ESC[Escrow Contract]
-    ARB[Arbitration Logic\n(on/off-chain policy)]
+    ARB[Arbitration Logic (on/off-chain policy)]
   end
 
   A -- open dispute --> API
